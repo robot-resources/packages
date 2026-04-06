@@ -1,0 +1,54 @@
+{
+  "name": "robot-resources",
+  "version": "1.7.7",
+  "description": "Robot Resources — AI agent tools. One command to install everything.",
+  "type": "module",
+  "bin": {
+    "robot-resources-setup": "./bin/setup.js"
+  },
+  "main": "./bin/setup.js",
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "README.md"
+  ],
+  "dependencies": {
+    "@robot-resources/cli-core": "*",
+    "@robot-resources/openclaw-plugin": "*",
+    "@robot-resources/scraper": "^0.3.0"
+  },
+  "devDependencies": {
+    "vitest": "^1.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "llm",
+    "router",
+    "scraper",
+    "mcp",
+    "cost-optimization",
+    "robot-resources"
+  ],
+  "license": "MIT",
+  "author": "Robot Resources Team",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robot-resources/packages.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://robotresources.ai",
+  "bugs": {
+    "url": "https://github.com/robot-resources/robot-resources/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

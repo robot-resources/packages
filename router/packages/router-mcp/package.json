@@ -1,0 +1,59 @@
+{
+  "name": "@robot-resources/router-mcp",
+  "mcpName": "io.github.robot-resources/router",
+  "version": "0.1.2",
+  "description": "MCP server for Robot Resources Router — stats, config, and model comparison tools",
+  "type": "module",
+  "bin": {
+    "router-mcp": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc && chmod 755 build/index.js",
+    "test": "vitest run",
+    "test:run": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx src/index.ts",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "files": [
+    "build",
+    "README.md"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.0"
+  },
+  "peerDependencies": {
+    "zod": "^3.25.0 || ^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "tsx": "^4.19.0",
+    "vitest": "^3.1.0",
+    "zod": "^3.25.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "router",
+    "llm",
+    "cost-optimization",
+    "model-context-protocol",
+    "robot-resources"
+  ],
+  "license": "MIT",
+  "author": "Robot Resources Team",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robot-resources/packages.git",
+    "directory": "router/packages/router-mcp"
+  },
+  "homepage": "https://robotresources.ai",
+  "bugs": {
+    "url": "https://github.com/robot-resources/robot-resources/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "name": "@robot-resources/scraper-tracking",
+  "version": "0.1.0",
+  "description": "Local usage tracking for AI agents using Scraper. Track compression savings and generate marketing messages.",
+  "author": "Robot Resources",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "@vitest/coverage-v8": "^1.2.0",
+    "vitest": "^1.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "tracking",
+    "analytics",
+    "scraper",
+    "compression",
+    "marketing",
+    "llm",
+    "tokens"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robot-resources/robot-resources.git",
+    "directory": "scraper/packages/tracking"
+  },
+  "homepage": "https://scraper.robotresources.ai",
+  "bugs": {
+    "url": "https://github.com/robot-resources/robot-resources/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

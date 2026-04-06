@@ -1,0 +1,96 @@
+{
+  "name": "@robot-resources/scraper",
+  "version": "0.3.0",
+  "description": "Context compression for AI agents. Fetch -> Extract -> Convert pipeline without LLM dependency.",
+  "author": "Robot Resources",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "robot-resources-scraper": "./bin/setup.js",
+    "scraper-mcp": "./dist/mcp-entry.js"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "benchmark": "npx tsx scripts/benchmark-compare.ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.0",
+    "@mozilla/readability": "^0.5.0",
+    "linkedom": "^0.16.11",
+    "robots-parser": "^3.0.1",
+    "turndown": "^7.1.3",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.2",
+    "@types/turndown": "^5.0.4",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "@vitest/coverage-v8": "^1.2.0",
+    "vitest": "^1.2.0"
+  },
+  "peerDependencies": {
+    "impit": ">=0.11.0",
+    "playwright": ">=1.40.0"
+  },
+  "peerDependenciesMeta": {
+    "impit": {
+      "optional": true
+    },
+    "playwright": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "context",
+    "compression",
+    "markdown",
+    "web",
+    "scraping",
+    "tokens",
+    "llm"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robot-resources/packages.git",
+    "directory": "scraper/packages/scraper"
+  },
+  "homepage": "https://robotresources.ai",
+  "bugs": {
+    "url": "https://github.com/robot-resources/robot-resources/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

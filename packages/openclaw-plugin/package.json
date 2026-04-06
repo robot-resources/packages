@@ -1,0 +1,39 @@
+{
+  "name": "@robot-resources/openclaw-plugin",
+  "version": "0.5.2",
+  "description": "Robot Resources plugin for OpenClaw — cost-optimized model routing and token-compressed web fetching",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "files": [
+    "index.js",
+    "openclaw.plugin.json"
+  ],
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "robot-resources",
+    "llm",
+    "routing",
+    "ai",
+    "cost-optimization"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robot-resources/packages.git",
+    "directory": "packages/openclaw-plugin"
+  },
+  "homepage": "https://robotresources.ai",
+  "license": "MIT",
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ]
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  }
+}
