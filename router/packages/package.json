@@ -1,7 +1,7 @@
 {
   "name": "@robot-resources/router-mcp",
   "mcpName": "io.github.robot-resources/router",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "MCP server for Robot Resources Router — stats, config, and model comparison tools",
   "type": "module",
   "bin": {

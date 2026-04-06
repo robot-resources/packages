@@ -2,7 +2,7 @@
 
 Cost-optimized model routing and token-compressed web fetching for OpenClaw.
 
-Routes LLM calls through the [Robot Resources Router](https://github.com/robot-resources/robot-resources) to select the cheapest capable model for each prompt, and redirects `web_fetch` calls through a scraper MCP for compressed output.
+Routes LLM calls through the [Robot Resources Router](https://github.com/robot-resources/packages) to select the cheapest capable model for each prompt, and redirects `web_fetch` calls through a scraper MCP for compressed output.
 
 ## Installation
 
