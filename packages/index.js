@@ -15,9 +15,10 @@
  * Requires: Robot Resources Router running (npx robot-resources)
  */
 
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { spawn } from 'node:child_process';
 
 const DEFAULT_ROUTER_URL = 'http://localhost:3838';
 
@@ -43,6 +44,48 @@ function logDecision(hook, data) {
     });
     appendFileSync(_debugPath, entry + '\n');
   } catch { /* debug logging must never break the plugin */ }
+}
+
+// ── Router auto-restart ─────────────────────────────────────────────────────
+//
+// When askRouter() fails (router not running), try to spawn it as a detached
+// background process. One attempt per plugin lifecycle — if it fails (missing
+// binary, port conflict, crash), we don't keep trying on every LLM call.
+// The spawned process survives the plugin/OC session because of detached+unref.
+
+let _restartAttempted = false;
+
+async function tryStartRouter(routerUrl) {
+  if (_restartAttempted) return false;
+  _restartAttempted = true;
+
+  const home = homedir();
+  const venvPython = process.platform === 'win32'
+    ? join(home, '.robot-resources', '.venv', 'Scripts', 'python.exe')
+    : join(home, '.robot-resources', '.venv', 'bin', 'python3');
+
+  if (!existsSync(venvPython)) return false;
+
+  try {
+    const child = spawn(venvPython, ['-m', 'robot_resources.cli.main', 'start'], {
+      detached: true,
+      stdio: 'ignore',
+      cwd: join(home, '.robot-resources'),
+    });
+    child.unref();
+  } catch {
+    return false;
+  }
+
+  // Wait for startup (uvicorn typically binds in <2s), probe health
+  for (let i = 0; i < 5; i++) {
+    await new Promise(r => setTimeout(r, 1000));
+    try {
+      const res = await fetch(`${routerUrl}/health`, { signal: AbortSignal.timeout(2000) });
+      if (res.ok) return true;
+    } catch { /* not ready yet */ }
+  }
+  return false;
 }
 
 const ROUTER_MODELS = [
@@ -252,8 +295,21 @@ const robotResourcesPlugin = {
       const prompt = event.prompt || '';
       if (!prompt) return;
 
-      const decision = await askRouter(routerUrl, prompt, providers);
-      if (!decision?.model) return;
+      let decision = await askRouter(routerUrl, prompt, providers);
+
+      // Router unreachable — attempt auto-restart
+      if (!decision?.model) {
+        const started = await tryStartRouter(routerUrl);
+        if (started) {
+          decision = await askRouter(routerUrl, prompt, providers);
+        }
+      }
+
+      // Still unreachable — log warning (NOT silent anymore)
+      if (!decision?.model) {
+        api.logger.warn('[robot-resources] Router offline — routing disabled for this call. Run: rr-router start');
+        return;
+      }
 
       lastRouting = decision;
       api.logger.info(
