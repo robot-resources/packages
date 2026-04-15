@@ -10,7 +10,8 @@
   },
   "files": [
     "index.js",
-    "openclaw.plugin.json"
+    "openclaw.plugin.json",
+    "lib"
   ],
   "keywords": [
     "openclaw",
