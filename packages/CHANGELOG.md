@@ -1,5 +1,15 @@
 # @robot-resources/openclaw-plugin
 
+## 0.5.4
+
+### Patch Changes
+
+- 2c2d44d: Auto-restart the router when it's detected as offline during model routing.
+
+  Previously, when the router process died (e.g., after a session disconnect), the plugin silently fell back to OpenClaw's default model — no routing, no telemetry, no warning. Agents kept working but cost optimization was silently disabled.
+
+  Now the plugin detects the router is unreachable, spawns it as a detached background process (survives session ends), waits for health confirmation, and retries the route. If auto-restart fails, logs a visible warning instead of silently falling back. One restart attempt per plugin lifecycle to prevent spawn-looping.
+
 ## 0.5.3
 
 ### Patch Changes
