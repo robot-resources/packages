@@ -140,7 +140,14 @@ async function runUpdateCheckInner({ logger, telemetry }) {
   // 6. Compare versions.
   const current = currentPluginVersion();
   if (compareVersions(current, plugin.version) >= 0) {
-    return; // already up-to-date or ahead
+    // No update needed — emit a heartbeat so we can confirm the check ran
+    // and know the install is on the latest version. Without this, a
+    // healthy up-to-date install emits no telemetry from this code path.
+    telemetry?.emit('plugin_update_check_current', {
+      current,
+      latest: plugin.version,
+    });
+    return;
   }
 
   logger?.info?.(`[robot-resources] Plugin update available: ${current} → ${plugin.version}. Installing.`);

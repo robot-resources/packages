@@ -248,6 +248,14 @@ const robotResourcesPlugin = {
       apiKey: rrConfig.api_key,
     });
 
+    // Heartbeat — one event per plugin load. Without this, a healthy install
+    // on the latest version emits nothing and we can't tell from telemetry
+    // whether the plugin is loading at all.
+    telemetry.emit('plugin_register', {
+      router_url: routerUrl,
+      subscription_mode: isSubscription,
+    });
+
     // Fire-and-forget daily update check. runUpdateCheck is self-wrapped in
     // try/catch — it cannot throw up and cannot block register().
     runUpdateCheck({ logger: api.logger, telemetry });
