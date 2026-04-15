@@ -1,5 +1,11 @@
 # @robot-resources/openclaw-plugin
 
+## 0.5.6
+
+### Patch Changes
+
+- 6d7bee0: Add `plugin_register` heartbeat event on every plugin load and `plugin_update_check_current` event when the daily update check determines no update is needed. Without these, a healthy install on the latest version emits zero telemetry — we couldn't confirm from Supabase whether the plugin was even loading. With the heartbeat, every OC session start gives us one event tagged with `plugin_version`, so version spread surfaces in `VersionsPanel` regardless of whether anything exceptional happens.
+
 ## 0.5.5
 
 ### Patch Changes
