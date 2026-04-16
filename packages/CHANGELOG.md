@@ -1,5 +1,15 @@
 # @robot-resources/openclaw-plugin
 
+## 0.5.8
+
+### Patch Changes
+
+- 813d154: Fix: plugin fails to load with `SyntaxError: await is only valid in async functions and the top level bodies of modules`. OpenClaw loads plugins via jiti in CJS-compatible mode, which does NOT support top-level await — but the shim introduced in 0.5.5 used `await import(...)` at the top level. Result: every fresh install since 0.5.5 has been silently broken. No `plugin_register` telemetry, no router routing, no `route_completed` events.
+
+  The shim now kicks off the dynamic import as a Promise (no top-level await) and `register()` awaits it before invoking the core. Safe-load rollback behavior is preserved. Confirmed working against a live OpenClaw droplet — plugin loads, `before_model_resolve` fires, routing telemetry flows end-to-end.
+
+  Any agent that installed 0.5.5, 0.5.6, or 0.5.7 should re-run the wizard or let the plugin's self-update ship this fix on the next session load (note: self-update can only run once the plugin loads, which requires this fix — so existing broken installs need a manual wizard re-run once).
+
 ## 0.5.7
 
 ### Patch Changes
