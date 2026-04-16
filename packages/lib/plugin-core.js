@@ -11,6 +11,7 @@ import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { createTelemetry } from './telemetry.js';
 import { runUpdateCheck } from './update-check.js';
+import { runBufferFlush } from './buffer-flush.js';
 
 const DEFAULT_ROUTER_URL = 'http://localhost:3838';
 
@@ -259,6 +260,17 @@ const robotResourcesPlugin = {
     // Fire-and-forget daily update check. runUpdateCheck is self-wrapped in
     // try/catch — it cannot throw up and cannot block register().
     runUpdateCheck({ logger: api.logger, telemetry });
+
+    // Fire-and-forget: flush any buffered router telemetry left on disk.
+    // The router buffers events to JSONL when the direct POST fails; if the
+    // router dies before the background sync drains them, the plugin ships
+    // them on next session start.
+    runBufferFlush({
+      platformUrl: rrConfig.platform_url,
+      apiKey: rrConfig.api_key,
+      logger: api.logger,
+      telemetry,
+    });
 
     if (isSubscription) {
       api.logger.info('[robot-resources] Subscription mode detected — routing restricted to Anthropic models');
