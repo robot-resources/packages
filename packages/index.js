@@ -6,11 +6,15 @@
  *  2. before_tool_call → redirect web_fetch through the Scraper MCP.
  *
  * This file is deliberately thin. A broken release of plugin-core.js can crash
- * during module evaluation (top-level await below) or during register(); both
- * paths land in handleLoadFailure, which restores the previous .bak-* release
- * and arms a 24h skip window before re-raising so OpenClaw disables the
- * plugin gracefully for this session. The user's next OC session picks up the
- * rolled-back code.
+ * during module evaluation or during register(); both paths land in
+ * handleLoadFailure, which restores the previous .bak-* release and arms a 24h
+ * skip window before re-raising so OpenClaw disables the plugin gracefully for
+ * this session. The user's next OC session picks up the rolled-back code.
+ *
+ * NOTE: OpenClaw loads plugins via jiti in CJS-compatible mode, which does NOT
+ * support top-level await. The dynamic import is kicked off at module load time
+ * as a Promise; `register()` awaits it before invoking the core. This pattern
+ * preserves the safe-load rollback behavior without top-level await.
  *
  * Install: openclaw plugins install @robot-resources/openclaw-plugin
  * Requires: Robot Resources Router running (npx robot-resources)
@@ -19,22 +23,26 @@
 let _coreModule = null;
 let _loadError = null;
 
-try {
-  _coreModule = await import('./lib/plugin-core.js');
-} catch (err) {
-  _loadError = err;
-  try {
-    const { handleLoadFailure } = await import('./lib/safe-load.js');
-    await handleLoadFailure(err);
-  } catch { /* safe-load itself may be affected by the bad release */ }
-}
+// Kick off the dynamic import immediately. No top-level await — just a Promise
+// that register() will resolve on first invocation.
+const _loadPromise = import('./lib/plugin-core.js')
+  .then((mod) => { _coreModule = mod; })
+  .catch(async (err) => {
+    _loadError = err;
+    try {
+      const safeLoad = await import('./lib/safe-load.js');
+      await safeLoad.handleLoadFailure(err);
+    } catch { /* safe-load itself may be affected by the bad release */ }
+  });
 
 const shim = {
   id: 'openclaw-plugin',
   name: 'Robot Resources',
   description: 'Cost-optimized model routing + token-compressed web fetching',
 
-  register(api) {
+  async register(api) {
+    await _loadPromise;
+
     if (!_coreModule) {
       api?.logger?.warn?.(
         `[robot-resources] Plugin load failed — disabled for this session. ` +
@@ -56,9 +64,3 @@ const shim = {
 };
 
 export default shim;
-
-// Re-exports for tests and external callers. Undefined when plugin-core failed to load.
-export const DEFAULT_ROUTER_URL = _coreModule?.DEFAULT_ROUTER_URL;
-export const ROUTER_MODELS = _coreModule?.ROUTER_MODELS;
-export const askRouter = _coreModule?.askRouter;
-export const detectSubscriptionMode = _coreModule?.detectSubscriptionMode;

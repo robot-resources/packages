@@ -22,7 +22,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = join(__dirname, '..');
 
 // Top-level import of our plugin module
-const pluginModule = await import('../index.js');
+const pluginModule = await import('../lib/plugin-core.js');
 const plugin = pluginModule.default;
 
 // ── OpenClaw Plugin Loader Simulation ──────────────────────────

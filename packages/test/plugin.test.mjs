@@ -61,7 +61,7 @@ describe('OpenClaw SDK contract: plugin shape', () => {
   let plugin;
 
   beforeEach(async () => {
-    const mod = await import('../index.js');
+    const mod = await import('../lib/plugin-core.js');
     plugin = mod.default;
   });
 
@@ -123,7 +123,7 @@ describe('register(api) — API key mode', () => {
   let plugin;
 
   beforeEach(async () => {
-    const mod = await import('../index.js');
+    const mod = await import('../lib/plugin-core.js');
     plugin = mod.default;
   });
 
@@ -210,7 +210,7 @@ describe('register(api) — subscription mode', () => {
   let plugin;
 
   beforeEach(async () => {
-    const mod = await import('../index.js');
+    const mod = await import('../lib/plugin-core.js');
     plugin = mod.default;
   });
 
@@ -297,7 +297,7 @@ describe('detectSubscriptionMode', () => {
   let detectSubscriptionMode;
 
   beforeEach(async () => {
-    const mod = await import('../index.js');
+    const mod = await import('../lib/plugin-core.js');
     detectSubscriptionMode = mod.detectSubscriptionMode;
   });
 
@@ -330,7 +330,7 @@ describe('before_tool_call hook', () => {
   let beforeToolCallHandler;
 
   beforeEach(async () => {
-    const mod = await import('../index.js');
+    const mod = await import('../lib/plugin-core.js');
     plugin = mod.default;
 
     const api = {
@@ -409,31 +409,36 @@ describe('before_tool_call hook', () => {
 });
 
 // ── Exports Tests ───────────────────────────────────────────────
+//
+// Named exports live on ./lib/plugin-core.js — the shim at index.js uses
+// deferred loading (jiti does not support top-level await) so it cannot
+// re-export them synchronously. External callers should import from
+// './lib/plugin-core.js' directly.
 
 describe('exports', () => {
-  it('exports DEFAULT_ROUTER_URL', async () => {
-    const mod = await import('../index.js');
+  it('exports DEFAULT_ROUTER_URL from plugin-core', async () => {
+    const mod = await import('../lib/plugin-core.js');
     expect(mod.DEFAULT_ROUTER_URL).toBe('http://localhost:3838');
   });
 
-  it('exports ROUTER_MODELS as non-empty array', async () => {
-    const mod = await import('../index.js');
+  it('exports ROUTER_MODELS as non-empty array from plugin-core', async () => {
+    const mod = await import('../lib/plugin-core.js');
     expect(Array.isArray(mod.ROUTER_MODELS)).toBe(true);
     expect(mod.ROUTER_MODELS.length).toBeGreaterThan(0);
   });
 
-  it('exports askRouter function', async () => {
-    const mod = await import('../index.js');
+  it('exports askRouter function from plugin-core', async () => {
+    const mod = await import('../lib/plugin-core.js');
     expect(typeof mod.askRouter).toBe('function');
   });
 
-  it('exports detectSubscriptionMode function', async () => {
-    const mod = await import('../index.js');
+  it('exports detectSubscriptionMode function from plugin-core', async () => {
+    const mod = await import('../lib/plugin-core.js');
     expect(typeof mod.detectSubscriptionMode).toBe('function');
   });
 
-  it('default export is plugin object with id', async () => {
-    const mod = await import('../index.js');
+  it('default export on index.js is plugin shim with id', async () => {
+    const mod = await import('../lib/plugin-core.js');
     expect(mod.default.id).toBe('openclaw-plugin');
   });
 });
@@ -444,7 +449,7 @@ describe('check_installation_status tool', () => {
   let plugin;
 
   beforeEach(async () => {
-    const mod = await import('../index.js');
+    const mod = await import('../lib/plugin-core.js');
     plugin = mod.default;
   });
 
@@ -535,7 +540,7 @@ describe('after_tool_call hook', () => {
 
   beforeEach(async () => {
     vi.resetModules();
-    const mod = await import('../index.js');
+    const mod = await import('../lib/plugin-core.js');
     plugin = mod.default;
   });
 
@@ -615,7 +620,7 @@ describe('llm_output hook', () => {
 
   beforeEach(async () => {
     vi.resetModules();
-    const mod = await import('../index.js');
+    const mod = await import('../lib/plugin-core.js');
     plugin = mod.default;
   });
 
@@ -715,7 +720,7 @@ describe('observability hooks debug logging', () => {
       };
     });
 
-    const mod = await import('../index.js');
+    const mod = await import('../lib/plugin-core.js');
     const plugin = mod.default;
 
     const handlers = {};
@@ -757,7 +762,7 @@ describe('observability hooks debug logging', () => {
       };
     });
 
-    const mod = await import('../index.js');
+    const mod = await import('../lib/plugin-core.js');
     const plugin = mod.default;
 
     const handlers = {};
@@ -805,7 +810,7 @@ describe('observability hooks debug logging', () => {
       };
     });
 
-    const mod = await import('../index.js');
+    const mod = await import('../lib/plugin-core.js');
     const plugin = mod.default;
 
     const handlers = {};
@@ -874,7 +879,7 @@ describe('post-install message injection', () => {
       };
     });
 
-    const mod = await import('../index.js');
+    const mod = await import('../lib/plugin-core.js');
     plugin = mod.default;
 
     const handlers = {};
@@ -929,7 +934,7 @@ describe('post-install message injection', () => {
       };
     });
 
-    const mod = await import('../index.js');
+    const mod = await import('../lib/plugin-core.js');
     plugin = mod.default;
 
     const handlers = {};
@@ -963,7 +968,7 @@ describe('post-install message injection', () => {
       };
     });
 
-    const mod = await import('../index.js');
+    const mod = await import('../lib/plugin-core.js');
     plugin = mod.default;
 
     const api = {
