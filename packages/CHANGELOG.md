@@ -1,5 +1,21 @@
 # @robot-resources/openclaw-plugin
 
+## 0.5.9
+
+### Patch Changes
+
+- 0814ae7: Enable plugin self-update on Windows via deferred swap.
+
+  PR #128 shipped self-update for macOS/Linux but explicitly skipped Windows because NTFS won't let you rename over open files — the in-place swap at `performSelfUpdate` fails while Node has the plugin's `.js` files loaded. Windows installs since 0.5.5 have been frozen on whatever version they installed with.
+
+  The fix stages the new payload into `{installDir}/.pending-<to>/` with a marker at `~/.robot-resources/.pending-swap.json`. On the next OpenClaw session the shim (`index.js`) runs `applyPendingSwap()` synchronously before the dynamic `import('./lib/plugin-core.js')` — the one moment where Node hasn't yet opened the payload files and NTFS share locks aren't held. The backup, rename, and rollback semantics are identical to the Unix path; only timing differs.
+
+  Failure recovery: a failed swap quarantines `.pending-*` to `.failed-pending-<to>-<ts>/`, arms the 24h update-skip window, and emits `plugin_update_swap_failed`. If the subsequent plugin-core import itself fails, `safe-load.js` still rolls back from `.bak-<from>/` exactly as before.
+
+  Existing Windows installs on the pre-fix code still need one manual `npx robot-resources` re-run to bootstrap onto this release; from there self-update works forever, same as Unix.
+
+  New CI matrix job runs the plugin test suite on `ubuntu-latest`, `macos-latest`, and `windows-latest`.
+
 ## 0.5.8
 
 ### Patch Changes
