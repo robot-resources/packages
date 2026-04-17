@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 
 import { performSelfUpdate } from '../lib/self-update.js';
 import { compareVersions, parseVersion } from '../lib/update-check.js';
+import { applyPendingSwap, quarantinePending, readPendingMarker } from '../lib/pending-swap.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -141,6 +142,7 @@ describe('performSelfUpdate', () => {
       shasum: tarball.shasum,
       installDir,
       telemetry: tel.client,
+      deferSwap: false, // exercise the in-place Unix swap on every OS
     });
 
     expect(result.ok).toBe(true);
@@ -282,10 +284,200 @@ describe('performSelfUpdate', () => {
       shasum: tarball.shasum,
       installDir,
       telemetry: tel.client,
+      deferSwap: false, // bak pruning runs at apply time; test the Unix path directly
     });
 
     const baks = readdirSync(installDir).filter((n) => n.startsWith('.bak-'));
     expect(baks).toEqual(['.bak-0.5.4']); // only the freshest remains
+  });
+});
+
+// ── pending-swap (Windows deferred) ─────────────────────────────────
+
+describe('deferred swap (Windows path)', () => {
+  let installDir;
+  let stateDir;
+  let tarball;
+  let server;
+
+  beforeEach(async () => {
+    installDir = makeInstallDir('0.5.4');
+    stateDir = mkdtempSync(join(tmpdir(), 'rr-pending-state-'));
+    tarball = buildTarball({ version: '0.5.5' });
+    server = await serveTarball(tarball.tarballPath);
+  });
+
+  afterEach(async () => {
+    rmSync(installDir, { recursive: true, force: true });
+    rmSync(stateDir, { recursive: true, force: true });
+    tarball.cleanup();
+    await server.close();
+  });
+
+  it('Fixture F — deferred stage + shim apply completes the swap', async () => {
+    const tel = captureTelemetry();
+
+    const result = await performSelfUpdate({
+      tarballUrl: server.url,
+      shasum: tarball.shasum,
+      installDir,
+      telemetry: tel.client,
+      deferSwap: true,
+      stateDir,
+    });
+
+    // After staging: deferred result, pending dir + marker present,
+    // live files UNCHANGED (still 0.5.4), and no .bak-* yet (shim creates it).
+    expect(result.ok).toBe(true);
+    expect(result.deferred).toBe(true);
+    expect(result.from).toBe('0.5.4');
+    expect(result.to).toBe('0.5.5');
+
+    const livePkg = JSON.parse(readFileSync(join(installDir, 'package.json'), 'utf-8'));
+    expect(livePkg.version).toBe('0.5.4');
+
+    const pendingDir = join(installDir, '.pending-0.5.5');
+    expect(() => statSync(pendingDir)).not.toThrow();
+    const pendingPkg = JSON.parse(readFileSync(join(pendingDir, 'package.json'), 'utf-8'));
+    expect(pendingPkg.version).toBe('0.5.5');
+
+    const marker = readPendingMarker(stateDir);
+    expect(marker).toMatchObject({ from: '0.5.4', to: '0.5.5', install_dir: installDir, payload_dir: '.pending-0.5.5' });
+
+    expect(readdirSync(installDir).some((n) => n.startsWith('.bak-'))).toBe(false);
+
+    const stageTypes = tel.events.map((e) => e.type);
+    expect(stageTypes).toContain('plugin_update_staged');
+    expect(stageTypes).toContain('plugin_update_pending_reload');
+    expect(stageTypes).not.toContain('plugin_update_succeeded');
+
+    // Now simulate the next session — shim calls applyPendingSwap at load.
+    const applied = applyPendingSwap({ installDir, stateDir });
+    expect(applied.action).toBe('swapped');
+    expect(applied.from).toBe('0.5.4');
+    expect(applied.to).toBe('0.5.5');
+
+    // After apply: live files are 0.5.5, .bak-0.5.4 holds the old payload,
+    // marker is gone, pending dir is gone.
+    const swappedPkg = JSON.parse(readFileSync(join(installDir, 'package.json'), 'utf-8'));
+    expect(swappedPkg.version).toBe('0.5.5');
+
+    const bakPkg = JSON.parse(readFileSync(join(installDir, '.bak-0.5.4', 'package.json'), 'utf-8'));
+    expect(bakPkg.version).toBe('0.5.4');
+
+    expect(readPendingMarker(stateDir)).toBeNull();
+    expect(() => statSync(pendingDir)).toThrow();
+
+    // .last-update diagnostic with deferred flag
+    const lastUpdate = JSON.parse(readFileSync(join(installDir, '.last-update'), 'utf-8'));
+    expect(lastUpdate).toMatchObject({ from: '0.5.4', to: '0.5.5', deferred: true });
+  });
+
+  it('Fixture G — quarantinePending moves .pending-*, arms skip window, clears marker', async () => {
+    // Stage a pending update normally so there's real state to quarantine
+    await performSelfUpdate({
+      tarballUrl: server.url,
+      shasum: tarball.shasum,
+      installDir,
+      telemetry: captureTelemetry().client,
+      deferSwap: true,
+      stateDir,
+    });
+
+    const marker = readPendingMarker(stateDir);
+    expect(marker).toBeTruthy();
+
+    // Call quarantine directly — the same path applyPendingSwap's catch block
+    // takes when renameSync throws mid-swap. Testing the recovery plumbing
+    // without needing to force a real filesystem failure keeps the test
+    // reliable on every OS in the CI matrix (real Windows AV/EBUSY failures
+    // are observable via production telemetry, not here).
+    const result = quarantinePending({
+      marker,
+      installDir,
+      stateDir,
+      error: new Error('simulated EBUSY'),
+    });
+
+    expect(result.quarantined_at).toMatch(/\.failed-pending-0\.5\.5-\d+$/);
+
+    // Pending dir moved to .failed-pending-*
+    expect(() => statSync(join(installDir, '.pending-0.5.5'))).toThrow();
+    const failed = readdirSync(installDir).find((n) => n.startsWith('.failed-pending-0.5.5-'));
+    expect(failed).toBeDefined();
+
+    // The quarantined payload is intact
+    const quarantinedPkg = JSON.parse(readFileSync(join(installDir, failed, 'package.json'), 'utf-8'));
+    expect(quarantinedPkg.version).toBe('0.5.5');
+
+    // Marker cleared so next session doesn't retry
+    expect(readPendingMarker(stateDir)).toBeNull();
+
+    // Skip window armed ~24h out
+    const skipUntil = readFileSync(join(stateDir, '.update-skip-until'), 'utf-8').trim();
+    expect(Date.parse(skipUntil)).toBeGreaterThan(Date.now() + 23 * 60 * 60 * 1_000);
+
+    // Live files untouched — quarantine never rolls live back, it just
+    // makes sure the bad staged update isn't retried. (Live rollback is
+    // safe-load.js's job, triggered when the subsequent plugin-core import
+    // actually fails.)
+    const livePkg = JSON.parse(readFileSync(join(installDir, 'package.json'), 'utf-8'));
+    expect(livePkg.version).toBe('0.5.4');
+  });
+
+  it('Fixture H — lock held: apply is a no-op, marker preserved for retry', async () => {
+    await performSelfUpdate({
+      tarballUrl: server.url,
+      shasum: tarball.shasum,
+      installDir,
+      telemetry: captureTelemetry().client,
+      deferSwap: true,
+      stateDir,
+    });
+
+    // Simulate a concurrent session holding the lock
+    const lockPath = join(installDir, '.update.lock');
+    writeFileSync(lockPath, '');
+
+    const applied = applyPendingSwap({ installDir, stateDir });
+    expect(applied.action).toBe('skipped');
+    expect(applied.reason).toBe('lock_held');
+
+    // Live files unchanged
+    const livePkg = JSON.parse(readFileSync(join(installDir, 'package.json'), 'utf-8'));
+    expect(livePkg.version).toBe('0.5.4');
+
+    // Marker still there for next session
+    const marker = readPendingMarker(stateDir);
+    expect(marker).toMatchObject({ from: '0.5.4', to: '0.5.5' });
+
+    // Pending dir still there
+    expect(() => statSync(join(installDir, '.pending-0.5.5'))).not.toThrow();
+  });
+
+  it('stale marker with missing pending dir is cleared without error', async () => {
+    // Hand-roll a marker pointing at a nonexistent pending dir
+    mkdirSync(stateDir, { recursive: true });
+    writeFileSync(
+      join(stateDir, '.pending-swap.json'),
+      JSON.stringify({
+        from: '0.5.4',
+        to: '0.5.5',
+        staged_at: new Date().toISOString(),
+        install_dir: installDir,
+        payload_dir: '.pending-0.5.5',
+      }),
+      'utf-8',
+    );
+
+    const applied = applyPendingSwap({ installDir, stateDir });
+    expect(applied.action).toBe('stale-cleared');
+    expect(readPendingMarker(stateDir)).toBeNull();
+  });
+
+  it('no marker means no-op', () => {
+    const applied = applyPendingSwap({ installDir, stateDir });
+    expect(applied.action).toBe('none');
   });
 });
 
@@ -298,27 +490,31 @@ describe('performSelfUpdate', () => {
 // real plugin install dir: set up a .bak-*, copy the lib file in, import from
 // there. This is heavier than the other fixtures so it's kept minimal.
 
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 describe('safe-load.handleLoadFailure', () => {
   let installDir;
   let stateDir;
   let origHome;
+  let origUserProfile;
 
   beforeEach(() => {
     installDir = mkdtempSync(join(tmpdir(), 'rr-safe-load-install-'));
-    stateDir = mkdtempSync(join(tmpdir(), 'rr-safe-load-state-'));
+    // Redirect os.homedir() to a temp path. HOME works on macOS/Linux;
+    // USERPROFILE is what Node reads on Windows. Set both so the test
+    // passes on every OS in the matrix.
     origHome = process.env.HOME;
-    process.env.HOME = stateDir.replace(/\/\.robot-resources$/, '').replace(/\/[^/]+$/, (m) => m); // keep parent
-    // Actually we need HOME = something whose .robot-resources IS stateDir
+    origUserProfile = process.env.USERPROFILE;
     const parent = mkdtempSync(join(tmpdir(), 'rr-safe-load-home-'));
     mkdirSync(join(parent, '.robot-resources'), { recursive: true });
     process.env.HOME = parent;
+    process.env.USERPROFILE = parent;
     stateDir = join(parent, '.robot-resources');
   });
 
   afterEach(() => {
     process.env.HOME = origHome;
+    process.env.USERPROFILE = origUserProfile;
     rmSync(installDir, { recursive: true, force: true });
     // stateDir cleaned via HOME parent
   });
@@ -327,8 +523,11 @@ describe('safe-load.handleLoadFailure', () => {
     // Simulate: installDir has BROKEN current files + a .bak-0.5.4 with the good ones.
     // Mount lib/safe-load.js at installDir/lib/safe-load.js so its __dirname resolves correctly.
     mkdirSync(join(installDir, 'lib'), { recursive: true });
+    // fileURLToPath handles the Windows-specific `/D:/a/...` pathname quirk.
+    // Using `new URL(...).pathname` + path.join would produce `D:\D:\a\...`
+    // on Windows runners.
     const safeLoadSrc = readFileSync(
-      join(new URL('../lib/safe-load.js', import.meta.url).pathname),
+      fileURLToPath(new URL('../lib/safe-load.js', import.meta.url)),
       'utf-8',
     );
     writeFileSync(join(installDir, 'lib', 'safe-load.js'), safeLoadSrc);

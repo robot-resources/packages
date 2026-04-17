@@ -1,50 +1,22 @@
 import {
-  closeSync,
-  copyFileSync,
   createWriteStream,
   existsSync,
   mkdirSync,
-  openSync,
-  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
+import { acquireLock, releaseLock, rmSyncWithRetry } from './update-lock.js';
+import { copyDir, PAYLOAD_ENTRIES, prunePreviousBaks } from './fs-helpers.js';
+import { stagePendingSwap } from './pending-swap.js';
 
 const TARBALL_TIMEOUT_MS = 30_000;
-const LOCK_STALE_MS = 10 * 60 * 1_000; // 10 minutes
-const PAYLOAD_ENTRIES = ['index.js', 'openclaw.plugin.json', 'package.json', 'lib'];
-
-function acquireLock(lockPath) {
-  // Attempt exclusive create. If it exists but is stale (>10min), steal it.
-  try {
-    const fd = openSync(lockPath, 'wx');
-    closeSync(fd);
-    return true;
-  } catch {
-    try {
-      const st = statSync(lockPath);
-      if (Date.now() - st.mtimeMs > LOCK_STALE_MS) {
-        rmSync(lockPath, { force: true });
-        const fd = openSync(lockPath, 'wx');
-        closeSync(fd);
-        return true;
-      }
-    } catch { /* ignore */ }
-    return false;
-  }
-}
-
-function releaseLock(lockPath) {
-  try { rmSync(lockPath, { force: true }); } catch { /* ignore */ }
-}
 
 async function downloadTarball(url, destPath) {
   const res = await fetch(url, { signal: AbortSignal.timeout(TARBALL_TIMEOUT_MS) });
@@ -60,19 +32,6 @@ function sha1File(path) {
   return hash.digest('hex');
 }
 
-function prunePreviousBaks(dir, keep) {
-  try {
-    const baks = readdirSync(dir)
-      .filter((n) => n.startsWith('.bak-'))
-      .map((n) => ({ name: n, mtime: statSync(join(dir, n)).mtimeMs }))
-      .sort((a, b) => b.mtime - a.mtime);
-
-    for (const b of baks.slice(keep)) {
-      rmSync(join(dir, b.name), { recursive: true, force: true });
-    }
-  } catch { /* best-effort */ }
-}
-
 function currentVersion(dir) {
   try {
     const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8'));
@@ -85,11 +44,25 @@ function currentVersion(dir) {
 /**
  * Downloads a new plugin tarball from npm and swaps it into place.
  *
- * Returns `{ ok, reason, from, to }`. On `ok === false`, the install dir is
- * untouched. On `ok === true`, the new version is active but takes effect
- * only on the next OpenClaw session (no in-process reload hook exists).
+ * On macOS/Linux: rename over live files — Unix inode semantics allow this
+ * while Node has the files loaded. Takes effect on next session.
+ *
+ * On Windows (deferSwap = true): stage the new payload into `.pending-<to>/`
+ * and write a marker. The shim (index.js) swaps on next session start, before
+ * Node opens any plugin files. NTFS share locks aren't held at that moment,
+ * so the rename succeeds.
+ *
+ * Returns `{ ok, reason, from, to, deferred }`. On `ok === false`, the install
+ * dir is untouched.
  */
-export async function performSelfUpdate({ tarballUrl, shasum, installDir, telemetry }) {
+export async function performSelfUpdate({
+  tarballUrl,
+  shasum,
+  installDir,
+  telemetry,
+  deferSwap = process.platform === 'win32',
+  stateDir,
+}) {
   const fromVersion = currentVersion(installDir);
   const lockPath = join(installDir, '.update.lock');
   const newDir = join(installDir, '.new');
@@ -127,7 +100,7 @@ export async function performSelfUpdate({ tarballUrl, shasum, installDir, teleme
       return { ok: false, reason: 'shasum_mismatch', from: fromVersion };
     }
 
-    // Extract via system tar — saves ~80KB of a tar-parser dep
+    // Extract via system tar — Windows 10 1803+ ships tar.exe in System32.
     const extractRes = spawnSync('tar', ['-xzf', tarballPath, '-C', newDir], {
       stdio: 'ignore',
       timeout: 30_000,
@@ -161,9 +134,36 @@ export async function performSelfUpdate({ tarballUrl, shasum, installDir, teleme
     }
     const toVersion = pkg.version || 'unknown';
 
-    // Backup current payload into .bak-${fromVersion}/ (copy-then-rename semantics
-    // via directory-level copy). Use copyFileSync + mkdirSync rather than rename
-    // so the original stays available up to the final swap step.
+    // Windows: stage into .pending-<to>/ and let the shim swap on next load.
+    // The pre-swap backup is created by the shim at swap time; creating it
+    // here would pin the current version to disk even when the user never
+    // restarts (leaves a confusing half-state).
+    if (deferSwap) {
+      try {
+        stagePendingSwap({
+          installDir,
+          extractedPkgDir,
+          fromVersion,
+          toVersion,
+          stateDir,
+        });
+      } catch (err) {
+        telemetry?.emit('plugin_update_failed', {
+          from: fromVersion,
+          stage: 'stage_pending',
+          error: err?.message,
+        });
+        return { ok: false, reason: 'stage_failed', from: fromVersion };
+      }
+
+      telemetry?.emit('plugin_update_staged', { from: fromVersion, to: toVersion });
+      telemetry?.emit('plugin_update_pending_reload', { from: fromVersion, to: toVersion });
+      return { ok: true, from: fromVersion, to: toVersion, deferred: true };
+    }
+
+    // Non-Windows: backup current payload into .bak-${fromVersion}/ (copy-then-
+    // rename semantics via directory-level copy). Use copyFileSync + mkdirSync
+    // rather than rename so the original stays available up to the final swap.
     const bakDir = join(installDir, `.bak-${fromVersion}`);
     try {
       rmSync(bakDir, { recursive: true, force: true });
@@ -214,21 +214,9 @@ export async function performSelfUpdate({ tarballUrl, shasum, installDir, teleme
     telemetry?.emit('plugin_update_pending_reload', { from: fromVersion, to: toVersion });
     return { ok: true, from: fromVersion, to: toVersion };
   } finally {
-    // Always clean .new staging + release lock
-    try { rmSync(newDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    // Always clean .new staging + release lock. rmSyncWithRetry defends
+    // against Windows AV holding EBUSY on freshly-extracted files.
+    rmSyncWithRetry(newDir);
     releaseLock(lockPath);
-  }
-}
-
-function copyDir(src, dst) {
-  const st = statSync(src);
-  if (st.isDirectory()) {
-    mkdirSync(dst, { recursive: true });
-    for (const entry of readdirSync(src)) {
-      copyDir(join(src, entry), join(dst, entry));
-    }
-  } else {
-    mkdirSync(dirname(dst), { recursive: true });
-    copyFileSync(src, dst);
   }
 }

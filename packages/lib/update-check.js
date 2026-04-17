@@ -78,16 +78,11 @@ export async function runUpdateCheck({ logger, telemetry } = {}) {
 }
 
 async function runUpdateCheckInner({ logger, telemetry }) {
-  // 1. Windows not yet supported for self-update (rename-over-open-file semantics).
-  if (process.platform === 'win32') {
-    return;
-  }
-
   const state = stateDir();
   const lastCheckPath = join(state, '.update-check');
   const skipUntilPath = join(state, '.update-skip-until');
 
-  // 2. Rollback cooldown — a previous update failed to load and we're waiting.
+  // 1. Rollback cooldown — a previous update failed to load and we're waiting.
   const skipUntil = readTimestamp(skipUntilPath);
   if (skipUntil) {
     const skipMs = Date.parse(skipUntil);
@@ -96,7 +91,7 @@ async function runUpdateCheckInner({ logger, telemetry }) {
     }
   }
 
-  // 3. Throttle — at most once per 24h.
+  // 2. Throttle — at most once per 24h.
   const lastCheck = readTimestamp(lastCheckPath);
   if (lastCheck) {
     const lastMs = Date.parse(lastCheck);
@@ -105,7 +100,7 @@ async function runUpdateCheckInner({ logger, telemetry }) {
     }
   }
 
-  // 4. Hit the version endpoint. Platform URL comes from config.json or env override.
+  // 3. Hit the version endpoint. Platform URL comes from config.json or env override.
   const platformUrl = resolvePlatformUrl();
   const versionUrl = process.env.RR_VERSION_URL || `${platformUrl}/v1/version`;
 
@@ -131,13 +126,13 @@ async function runUpdateCheckInner({ logger, telemetry }) {
     return;
   }
 
-  // 5. Kill switch — operator halt.
+  // 4. Kill switch — operator halt.
   if (plugin.kill_switch === true) {
     telemetry?.emit('plugin_update_kill_switch_active', { latest: plugin.version });
     return;
   }
 
-  // 6. Compare versions.
+  // 5. Compare versions.
   const current = currentPluginVersion();
   if (compareVersions(current, plugin.version) >= 0) {
     // No update needed — emit a heartbeat so we can confirm the check ran

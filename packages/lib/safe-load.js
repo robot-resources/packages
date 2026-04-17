@@ -4,6 +4,7 @@ import {
   readdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   writeFileSync,
   statSync,
 } from 'node:fs';
@@ -103,6 +104,10 @@ export async function handleLoadFailure(err) {
   const dir = installDir();
   const failedVersion = currentVersion(dir);
   const bak = findBakDir(dir);
+
+  // Clear any pending-swap marker. If we're rolling back, a staged update is
+  // also suspect — don't retry it on next session.
+  try { rmSync(join(stateDir(), '.pending-swap.json'), { force: true }); } catch { /* ignore */ }
 
   emitRollbackTelemetry({
     from: failedVersion,
