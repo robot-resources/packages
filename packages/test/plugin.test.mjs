@@ -291,6 +291,75 @@ describe('register(api) — subscription mode', () => {
   });
 });
 
+// ── plugin_register dedup ──────────────────────────────────────
+//
+// OpenClaw calls register() multiple times per session (once per internal
+// subsystem). Before this dedup, each call produced a separate
+// `plugin_register` telemetry event — inflating "distinct install" counts
+// by 3-4x in production. Test asserts fetch is only hit ONCE per process,
+// regardless of how many times register() is invoked.
+
+describe('plugin_register dedup', () => {
+  let plugin;
+  let emitSpy;
+
+  beforeEach(async () => {
+    // Reset the module cache so the module-level _registerEmitted guard
+    // in plugin-core.js starts false for each test. Without this, tests
+    // share the same module instance and dedup state persists.
+    vi.resetModules();
+
+    // Mock the telemetry client so we can count plugin_register emits
+    // directly — avoids needing a real api_key on disk or a fake server.
+    emitSpy = vi.fn();
+    vi.doMock('../lib/telemetry.js', () => ({
+      createTelemetry: () => ({ emit: emitSpy, PLUGIN_VERSION: 'test' }),
+    }));
+    // runUpdateCheck + runBufferFlush are fire-and-forget; stub them so
+    // they don't touch the network during tests.
+    vi.doMock('../lib/update-check.js', () => ({ runUpdateCheck: vi.fn() }));
+    vi.doMock('../lib/buffer-flush.js', () => ({ runBufferFlush: vi.fn() }));
+
+    const mod = await import('../lib/plugin-core.js');
+    plugin = mod.default;
+  });
+
+  afterEach(() => {
+    vi.doUnmock('../lib/telemetry.js');
+    vi.doUnmock('../lib/update-check.js');
+    vi.doUnmock('../lib/buffer-flush.js');
+    vi.restoreAllMocks();
+  });
+
+  function makeApi() {
+    return {
+      config: {},
+      pluginConfig: {},
+      logger: { info: vi.fn(), warn: vi.fn() },
+      registerProvider: vi.fn(),
+      on: vi.fn(),
+    };
+  }
+
+  function pluginRegisterCount() {
+    return emitSpy.mock.calls.filter((c) => c[0] === 'plugin_register').length;
+  }
+
+  it('emits plugin_register at most once across multiple register() calls', () => {
+    plugin.register(makeApi());
+    plugin.register(makeApi());
+    plugin.register(makeApi());
+    plugin.register(makeApi());
+
+    expect(pluginRegisterCount()).toBe(1);
+  });
+
+  it('still emits plugin_register on the very first register() call', () => {
+    plugin.register(makeApi());
+    expect(pluginRegisterCount()).toBe(1);
+  });
+});
+
 // ── detectSubscriptionMode unit tests ──────────────────────────
 
 describe('detectSubscriptionMode', () => {

@@ -18,6 +18,14 @@ const DEFAULT_ROUTER_URL = 'http://localhost:3838';
 const DEBUG = !!process.env.RR_DEBUG;
 let _debugPath = null;
 
+// Guard so plugin_register fires at most once per Node process lifetime.
+// OpenClaw calls register() multiple times per session — once per internal
+// subsystem (model resolve, tool dispatch, hook registration, etc.) —
+// producing 3-4 telemetry events for a single plugin load. That inflates
+// every "distinct install" metric by the same factor. Emitting once per
+// process gives us accurate adoption numbers without losing the signal.
+let _registerEmitted = false;
+
 function logDecision(hook, data) {
   if (!DEBUG) return;
   try {
@@ -249,13 +257,18 @@ const robotResourcesPlugin = {
       apiKey: rrConfig.api_key,
     });
 
-    // Heartbeat — one event per plugin load. Without this, a healthy install
-    // on the latest version emits nothing and we can't tell from telemetry
-    // whether the plugin is loading at all.
-    telemetry.emit('plugin_register', {
-      router_url: routerUrl,
-      subscription_mode: isSubscription,
-    });
+    // Heartbeat — one event per plugin-load *process*, not per register()
+    // call. OC re-invokes register() for multiple internal subsystems in a
+    // single session, and we don't want each call to count as a separate
+    // adoption event. The first call emits; subsequent calls in the same
+    // process are skipped (the plugin is already loaded).
+    if (!_registerEmitted) {
+      _registerEmitted = true;
+      telemetry.emit('plugin_register', {
+        router_url: routerUrl,
+        subscription_mode: isSubscription,
+      });
+    }
 
     // Fire-and-forget daily update check. runUpdateCheck is self-wrapped in
     // try/catch — it cannot throw up and cannot block register().
