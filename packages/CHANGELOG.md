@@ -1,5 +1,11 @@
 # @robot-resources/openclaw-plugin
 
+## 0.5.10
+
+### Patch Changes
+
+- 0cea7e1: Fix: `plugin_register` telemetry now emits at most once per plugin-load process. OpenClaw invokes `register()` multiple times per session (once per internal subsystem — model resolver, tool dispatch, hook registration, etc.), producing 3-4 `plugin_register` events for a single actual plugin load. That inflated every "distinct install" adoption metric by 3-4x. A module-level guard now suppresses re-emits. Still captures the first load per process, which is what the heartbeat was designed to signal.
+
 ## 0.5.9
 
 ### Patch Changes
