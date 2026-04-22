@@ -1,5 +1,11 @@
 # @robot-resources/openclaw-plugin
 
+## 0.5.11
+
+### Patch Changes
+
+- 99c45f7: Plugin: `register()` is now idempotent at the work level. OpenClaw calls `register()` multiple times per session (once per internal subsystem); the first call runs the setup (hooks, tool, provider, fresh-install ack) and subsequent calls in the same process skip that block. Pairs with the existing `plugin_register` telemetry-dedup guard from 0.5.10. No observable behavior change for users — removes redundant registration work.
+
 ## 0.5.10
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@robot-resources/openclaw-plugin",
-  "version": "0.5.10",
+  "version": "0.5.11",
   "description": "Robot Resources plugin for OpenClaw — cost-optimized model routing and token-compressed web fetching",
   "type": "module",
   "main": "index.js",
