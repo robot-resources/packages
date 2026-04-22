@@ -26,6 +26,14 @@ let _debugPath = null;
 // process gives us accurate adoption numbers without losing the signal.
 let _registerEmitted = false;
 
+// Second guard for the per-process setup work: hook registration, tool
+// registration, provider registration, fresh-install ack. OC appears to
+// dedupe these internally (we've never seen hooks fire 3-4x per event), so
+// this is primarily hygiene — it avoids repeating work that semantically
+// only belongs once per process and keeps the code's behavior matching the
+// comment that says "once per plugin-load".
+let _registerWorkDone = false;
+
 function logDecision(hook, data) {
   if (!DEBUG) return;
   try {
@@ -288,6 +296,11 @@ const robotResourcesPlugin = {
     if (isSubscription) {
       api.logger.info('[robot-resources] Subscription mode detected — routing restricted to Anthropic models');
     }
+
+    // Per-process setup runs exactly once. Subsequent register() calls from
+    // OC's internal subsystems skip this block entirely.
+    if (_registerWorkDone) return;
+    _registerWorkDone = true;
 
     let freshInstall = false;
     const ackPath = join(homedir(), '.robot-resources', '.install-ack');

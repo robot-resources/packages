@@ -13,7 +13,7 @@
  * - Missing required fields in manifest
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -168,6 +168,16 @@ describe('OpenClaw harness: plugin loading', () => {
 });
 
 describe('OpenClaw harness: provider registration', () => {
+  let plugin;
+
+  beforeEach(async () => {
+    // register() is idempotent at the work level — reset modules so each
+    // test gets a fresh _registerWorkDone guard.
+    vi.resetModules();
+    const mod = await import('../lib/plugin-core.js');
+    plugin = mod.default;
+  });
+
   it('registers provider with object signature (not positional args)', () => {
     const { api, registrations } = createMockOpenClawApi();
 
@@ -227,6 +237,14 @@ describe('OpenClaw harness: provider registration', () => {
 });
 
 describe('OpenClaw harness: before_model_resolve hook', () => {
+  let plugin;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    const mod = await import('../lib/plugin-core.js');
+    plugin = mod.default;
+  });
+
   it('registers before_model_resolve hook (valid OpenClaw hook)', () => {
     const { api, registrations } = createMockOpenClawApi();
 

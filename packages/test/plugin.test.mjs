@@ -61,6 +61,7 @@ describe('OpenClaw SDK contract: plugin shape', () => {
   let plugin;
 
   beforeEach(async () => {
+    vi.resetModules();
     const mod = await import('../lib/plugin-core.js');
     plugin = mod.default;
   });
@@ -123,6 +124,9 @@ describe('register(api) — API key mode', () => {
   let plugin;
 
   beforeEach(async () => {
+    // register() is now idempotent at the work level — without a module reset,
+    // the second test's register() call would skip provider/hook registration.
+    vi.resetModules();
     const mod = await import('../lib/plugin-core.js');
     plugin = mod.default;
   });
@@ -210,6 +214,7 @@ describe('register(api) — subscription mode', () => {
   let plugin;
 
   beforeEach(async () => {
+    vi.resetModules();
     const mod = await import('../lib/plugin-core.js');
     plugin = mod.default;
   });
@@ -360,6 +365,81 @@ describe('plugin_register dedup', () => {
   });
 });
 
+// ── register() work-level idempotency ──────────────────────────
+//
+// The telemetry dedup above protects adoption metrics; this block protects
+// the rest of register() — hook registration, tool registration, provider
+// registration, fresh-install ack. The first register() call does the
+// setup; subsequent calls in the same process skip the work block and
+// return early. Multiple api instances won't see duplicate hook wiring.
+
+describe('register() work-level idempotency', () => {
+  let plugin;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.doMock('../lib/update-check.js', () => ({ runUpdateCheck: vi.fn() }));
+    vi.doMock('../lib/buffer-flush.js', () => ({ runBufferFlush: vi.fn() }));
+
+    const mod = await import('../lib/plugin-core.js');
+    plugin = mod.default;
+  });
+
+  afterEach(() => {
+    vi.doUnmock('../lib/update-check.js');
+    vi.doUnmock('../lib/buffer-flush.js');
+    vi.restoreAllMocks();
+  });
+
+  function makeApi() {
+    return {
+      config: {},
+      pluginConfig: {},
+      logger: { info: vi.fn(), warn: vi.fn() },
+      registerProvider: vi.fn(),
+      registerTool: vi.fn(),
+      on: vi.fn(),
+    };
+  }
+
+  it('registers provider exactly once across multiple register() calls', () => {
+    const api1 = makeApi();
+    const api2 = makeApi();
+    const api3 = makeApi();
+
+    plugin.register(api1);
+    plugin.register(api2);
+    plugin.register(api3);
+
+    expect(api1.registerProvider).toHaveBeenCalledOnce();
+    expect(api2.registerProvider).not.toHaveBeenCalled();
+    expect(api3.registerProvider).not.toHaveBeenCalled();
+  });
+
+  it('registers hooks exactly once across multiple register() calls', () => {
+    const api1 = makeApi();
+    const api2 = makeApi();
+
+    plugin.register(api1);
+    plugin.register(api2);
+
+    // First call wires every hook, second call is a no-op.
+    expect(api1.on.mock.calls.length).toBeGreaterThan(0);
+    expect(api2.on).not.toHaveBeenCalled();
+  });
+
+  it('registers the installation-status tool exactly once', () => {
+    const api1 = makeApi();
+    const api2 = makeApi();
+
+    plugin.register(api1);
+    plugin.register(api2);
+
+    expect(api1.registerTool).toHaveBeenCalledOnce();
+    expect(api2.registerTool).not.toHaveBeenCalled();
+  });
+});
+
 // ── detectSubscriptionMode unit tests ──────────────────────────
 
 describe('detectSubscriptionMode', () => {
@@ -397,12 +477,14 @@ describe('detectSubscriptionMode', () => {
 describe('before_tool_call hook', () => {
   let plugin;
   let beforeToolCallHandler;
+  let bootstrapApi;
 
   beforeEach(async () => {
+    vi.resetModules();
     const mod = await import('../lib/plugin-core.js');
     plugin = mod.default;
 
-    const api = {
+    bootstrapApi = {
       config: {},
       pluginConfig: {},
       logger: { info: vi.fn() },
@@ -410,9 +492,9 @@ describe('before_tool_call hook', () => {
       on: vi.fn(),
     };
 
-    plugin.register(api);
+    plugin.register(bootstrapApi);
 
-    const hookCall = api.on.mock.calls.find(c => c[0] === 'before_tool_call');
+    const hookCall = bootstrapApi.on.mock.calls.find(c => c[0] === 'before_tool_call');
     beforeToolCallHandler = hookCall[1];
   });
 
@@ -461,18 +543,8 @@ describe('before_tool_call hook', () => {
     expect(result.paramsOverride.mode).toBe('auto');
   });
 
-  it('registers the hook with priority 10', async () => {
-    const api = {
-      config: {},
-      pluginConfig: {},
-      logger: { info: vi.fn() },
-      registerProvider: vi.fn(),
-      on: vi.fn(),
-    };
-
-    plugin.register(api);
-
-    const hookCall = api.on.mock.calls.find(c => c[0] === 'before_tool_call');
+  it('registers the hook with priority 10', () => {
+    const hookCall = bootstrapApi.on.mock.calls.find(c => c[0] === 'before_tool_call');
     expect(hookCall[2]).toEqual({ priority: 10 });
   });
 });
@@ -518,6 +590,7 @@ describe('check_installation_status tool', () => {
   let plugin;
 
   beforeEach(async () => {
+    vi.resetModules();
     const mod = await import('../lib/plugin-core.js');
     plugin = mod.default;
   });
