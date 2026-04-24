@@ -5,13 +5,14 @@
  * safe-load.js and rolled back. Do not add top-level side effects here.
  */
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { createTelemetry } from './telemetry.js';
 import { runUpdateCheck } from './update-check.js';
 import { runBufferFlush } from './buffer-flush.js';
+import { runPluginHeal } from './plugin-heal.js';
 
 const DEFAULT_ROUTER_URL = 'http://localhost:3838';
 
@@ -259,10 +260,33 @@ const robotResourcesPlugin = {
     const isSubscription = detectSubscriptionMode(api.config);
 
     // Construct telemetry client once. Safe if api_key is missing — emit() no-ops.
+    // onHealHint receives allowlisted hints from the platform's response:
+    //   - 'reheal_router' → force a bypass-throttle heal attempt
+    //   - 'rerun_wizard'  → surface a nag in the next user-facing message
     const rrConfig = readRrConfig();
+    let _pendingNag = null;
     const telemetry = createTelemetry({
       platformUrl: rrConfig.platform_url,
       apiKey: rrConfig.api_key,
+      onHealHint: (hint) => {
+        if (hint === 'reheal_router') {
+          // Clear the plugin-heal throttle so the next runPluginHeal call
+          // actually runs instead of short-circuiting. Server-triggered
+          // re-heal bypasses the 1h client throttle by design.
+          try {
+            const throttle = join(homedir(), '.robot-resources', '.plugin-heal-check');
+            if (existsSync(throttle)) unlinkSync(throttle);
+          } catch { /* throttle removal is best-effort */ }
+          runPluginHeal({
+            routerUrl,
+            telemetry,
+            logger: api.logger,
+            tryStartRouter: (url, t) => tryStartRouter(url, t),
+          });
+        } else if (hint === 'rerun_wizard') {
+          _pendingNag = 'Robot Resources needs attention — run `npx robot-resources` to reinstall.';
+        }
+      },
     });
 
     // Heartbeat — one event per plugin-load *process*, not per register()
@@ -291,6 +315,20 @@ const robotResourcesPlugin = {
       apiKey: rrConfig.api_key,
       logger: api.logger,
       telemetry,
+    });
+
+    // Fire-and-forget: plugin-side self-heal. Runs on every OC gateway
+    // start regardless of whether OC routes anything — probes /health and
+    // if the router is dead, tries to revive it (enable-linger +
+    // systemctl --user restart + detached spawn). Throttled to once/hr.
+    // This is the anchor for users whose router died after install —
+    // the router's own self_heal only runs at router startup, and dead
+    // routers can't self-heal.
+    runPluginHeal({
+      routerUrl,
+      telemetry,
+      logger: api.logger,
+      tryStartRouter: (url, t) => tryStartRouter(url, t),
     });
 
     if (isSubscription) {
@@ -376,6 +414,14 @@ const robotResourcesPlugin = {
       if (lastRouting) {
         suffix += `\n\n⚡ _Routed → ${lastRouting.model} (${lastRouting.savings}% savings)_`;
         lastRouting = null;
+      }
+
+      // Server-triggered nag when the platform has seen repeated install
+      // failures / heal failures from this api_key. Fires at most once
+      // per process — we clear after surfacing so we don't spam the user.
+      if (_pendingNag) {
+        suffix += `\n\n⚠️ _${_pendingNag}_`;
+        _pendingNag = null;
       }
 
       if (!suffix) return;
