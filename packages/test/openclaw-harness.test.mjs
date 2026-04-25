@@ -167,7 +167,7 @@ describe('OpenClaw harness: plugin loading', () => {
   });
 });
 
-describe('OpenClaw harness: provider registration', () => {
+describe('OpenClaw harness: in-process routing (no provider registration)', () => {
   let plugin;
 
   beforeEach(async () => {
@@ -178,54 +178,10 @@ describe('OpenClaw harness: provider registration', () => {
     plugin = mod.default;
   });
 
-  it('registers provider with object signature (not positional args)', () => {
-    const { api, registrations } = createMockOpenClawApi();
-
-    plugin.register(api);
-
-    expect(api.registerProvider).toHaveBeenCalledOnce();
-    const arg = api.registerProvider.mock.calls[0][0];
-    expect(typeof arg).toBe('object');
-    expect(typeof arg).not.toBe('string');
-    expect(arg.id).toBe('robot-resources');
-    expect(Array.isArray(arg.auth)).toBe(true);
-    expect(arg.auth.length).toBeGreaterThan(0);
-  });
-
-  it('provider auth has required fields per OpenClaw SDK', () => {
+  it('does NOT call api.registerProvider (in-process routing replaces proxy provider in PR 2)', () => {
     const { api } = createMockOpenClawApi();
     plugin.register(api);
-
-    const provider = api.registerProvider.mock.calls[0][0];
-    const auth = provider.auth[0];
-
-    expect(auth.id).toBeDefined();
-    expect(auth.kind).toBe('custom');
-    expect(typeof auth.run).toBe('function');
-  });
-
-  it('provider auth run returns valid configPatch structure', async () => {
-    const { api } = createMockOpenClawApi();
-    plugin.register(api);
-
-    const provider = api.registerProvider.mock.calls[0][0];
-    const result = await provider.auth[0].run({
-      prompter: { text: vi.fn().mockResolvedValue('http://localhost:3838') },
-    });
-
-    expect(result.configPatch).toBeDefined();
-    expect(result.configPatch.models.providers['robot-resources']).toBeDefined();
-
-    const pConfig = result.configPatch.models.providers['robot-resources'];
-    expect(pConfig.baseUrl).toBe('http://localhost:3838');
-    expect(pConfig.api).toBe('anthropic-messages');
-    expect(Array.isArray(pConfig.models)).toBe(true);
-    expect(pConfig.models.length).toBeGreaterThan(0);
-    expect(pConfig.models[0].id).toBeDefined();
-    expect(pConfig.models[0].api).toBe('anthropic-messages');
-
-    expect(Array.isArray(result.profiles)).toBe(true);
-    expect(result.defaultModel).toContain('robot-resources/');
+    expect(api.registerProvider).not.toHaveBeenCalled();
   });
 
   it('no diagnostics (no invalid API calls)', () => {

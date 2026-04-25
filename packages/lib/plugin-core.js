@@ -13,6 +13,9 @@ import { createTelemetry } from './telemetry.js';
 import { runUpdateCheck } from './update-check.js';
 import { runBufferFlush } from './buffer-flush.js';
 import { runPluginHeal } from './plugin-heal.js';
+import { asyncRoutePrompt } from './routing/router.js';
+import { MODELS_DB } from './routing/selector.js';
+import { classifyWithLlmDetailed } from './routing/classify.js';
 
 const DEFAULT_ROUTER_URL = 'http://localhost:3838';
 
@@ -98,13 +101,9 @@ async function tryStartRouter(routerUrl, telemetry) {
   return false;
 }
 
-const ROUTER_MODELS = [
-  'claude-sonnet-4-20250514',
-  'claude-haiku-4-5-20251001',
-  'claude-opus-4-20250514',
-];
-
-async function askRouter(routerUrl, prompt, providers = null) {
+// HTTP-only routing path. Kept for one release as a fallback when the
+// in-process path throws unexpectedly. Deleted entirely in PR 3.
+async function askRouterHttp(routerUrl, prompt, providers = null) {
   try {
     const body = { prompt };
     if (providers) body.providers = providers;
@@ -127,6 +126,75 @@ async function askRouter(routerUrl, prompt, providers = null) {
   }
 }
 
+// In-process routing with HTTP fallback. The strategic shift of PR 2.
+//
+// `providers` is the subscription-mode constraint (['anthropic'] or null).
+// `api` and `telemetry` are required for hybrid provider detection +
+// observability (route_completed / route_failed / classifier_fallback /
+// no_providers_detected).
+async function askRouter(routerUrl, prompt, providers = null, api = null, telemetry = null) {
+  const startedAt = Date.now();
+  try {
+    const detected = getAvailableProviders(api);
+
+    let effective = detected;
+    if (providers && providers.length) {
+      effective = new Set([...detected].filter((p) => providers.includes(p)));
+    }
+
+    if (effective.size === 0) {
+      // Detection found NOTHING. Routing to the full DB here would risk
+      // returning a model the user has no key for — OC would then fail the
+      // LLM call while route_completed telemetry looks healthy. Worse, it
+      // would mask hybrid-detection bugs (e.g. if OC ever changes its config
+      // schema and Object.entries silently surfaces nothing). Safer: surface
+      // the detection failure as telemetry and let OC fall through to its
+      // own default model. The before_model_resolve hook checks
+      // !decision?.model and skips the override.
+      telemetry?.emit('no_providers_detected', {
+        has_oc_config: !!api?.config?.models?.providers,
+      });
+      return { provider: null, model: null, savings: 0 };
+    }
+
+    const filteredDb = MODELS_DB.filter((m) => effective.has(m.provider));
+
+    // classifierImpl is invoked ONLY when keyword confidence falls below
+    // CONFIDENCE_THRESHOLD (~30% of prompts). The slow path's telemetry
+    // (`classifier_fallback`) is emitted from inside classifyWithLlmDetailed
+    // so it only fires when the classifier actually ran — preserving the
+    // keyword fast-path performance characteristic.
+    const result = await asyncRoutePrompt(prompt, {
+      modelsDb: filteredDb,
+      classifierImpl: async (p) => (await classifyWithLlmDetailed(p, { telemetry })).result,
+    });
+
+    telemetry?.emit('route_completed', {
+      mode: 'in-process',
+      task_type: result.task_type,
+      provider: result.provider,
+      selected_model: result.selected_model,
+      savings_percent: result.savings_percent,
+      latency_ms: Date.now() - startedAt,
+    });
+
+    return {
+      provider: result.provider,
+      model: result.selected_model,
+      savings: result.savings_percent,
+    };
+  } catch (err) {
+    telemetry?.emit('route_failed', {
+      mode: 'in-process',
+      error_type: err?.constructor?.name ?? 'Error',
+      error_message: String(err?.message ?? err).slice(0, 200),
+      latency_ms: Date.now() - startedAt,
+    });
+    // HTTP fallback: belt-and-suspenders for one release. Deleted in PR 3.
+    return askRouterHttp(routerUrl, prompt, providers);
+  }
+}
+
 function detectSubscriptionMode(config) {
   const profiles = config?.auth?.profiles;
   if (profiles && typeof profiles === 'object') {
@@ -138,17 +206,37 @@ function detectSubscriptionMode(config) {
   return false;
 }
 
-function buildModelDefinition(modelId) {
-  return {
-    id: modelId,
-    name: modelId,
-    api: 'anthropic-messages',
-    reasoning: false,
-    input: ['text', 'image'],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 200_000,
-    maxTokens: 8_192,
-  };
+// Hybrid provider detection for in-process routing. Union of:
+//   1. api.config.models.providers — OBJECT keyed by provider name (the value
+//      shape mirrors what registerProvider's configPatch produces, see
+//      ~lines 537-547 of the deleted block).
+//   2. env vars — the migration guide tells users to set ANTHROPIC_API_KEY /
+//      OPENAI_API_KEY / GOOGLE_API_KEY / GEMINI_API_KEY, so config-only
+//      detection misses the well-configured cohort.
+// Empty Set return → caller emits no_providers_detected and skips the
+// override; OC then uses its own default model. We intentionally do NOT
+// route to the full DB on empty detection — that would mask detection bugs
+// and risk routing to a model the user has no key for.
+function getAvailableProviders(api) {
+  const detected = new Set();
+  try {
+    const providers = api?.config?.models?.providers;
+    if (providers && typeof providers === 'object' && !Array.isArray(providers)) {
+      for (const [name, cfg] of Object.entries(providers)) {
+        const key = cfg?.apiKey ?? cfg?.api_key;
+        if (typeof key !== 'string') continue;
+        if (key === 'n/a' || key === '') continue;
+        if (key.startsWith('${') || key.includes('YOUR_')) continue;
+        detected.add(name);
+      }
+    }
+  } catch { /* malformed config — env-var path is the fallback */ }
+
+  if (process.env.ANTHROPIC_API_KEY) detected.add('anthropic');
+  if (process.env.OPENAI_API_KEY) detected.add('openai');
+  if (process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY) detected.add('google');
+
+  return detected;
 }
 
 function readRrConfig() {
@@ -299,6 +387,7 @@ const robotResourcesPlugin = {
       telemetry.emit('plugin_register', {
         router_url: routerUrl,
         subscription_mode: isSubscription,
+        mode: 'in-process',
       });
     }
 
@@ -365,12 +454,12 @@ const robotResourcesPlugin = {
       const prompt = event.prompt || '';
       if (!prompt) return;
 
-      let decision = await askRouter(routerUrl, prompt, providers);
+      let decision = await askRouter(routerUrl, prompt, providers, api, telemetry);
 
       if (!decision?.model) {
         const started = await tryStartRouter(routerUrl, telemetry);
         if (started) {
-          decision = await askRouter(routerUrl, prompt, providers);
+          decision = await askRouter(routerUrl, prompt, providers, api, telemetry);
         }
       }
 
@@ -494,69 +583,12 @@ const robotResourcesPlugin = {
       });
     }
 
-    if (isSubscription) {
-      api.logger.info('[robot-resources] Subscription mode — skipping provider registration (routing via hook only)');
-      return;
-    }
-
-    api.registerProvider({
-      id: 'robot-resources',
-      label: 'Robot Resources',
-      docsPath: '/providers/models',
-      auth: [
-        {
-          id: 'local',
-          label: 'Local Router proxy',
-          hint: 'Route requests through the Robot Resources Router for cost optimization',
-          kind: 'custom',
-          async run(ctx) {
-            const baseUrlInput = await ctx.prompter.text({
-              message: 'Robot Resources Router URL',
-              initialValue: routerUrl,
-              validate: (value) => {
-                try { new URL(value); } catch { return 'Enter a valid URL'; }
-                return undefined;
-              },
-            });
-
-            const baseUrl = baseUrlInput.trim().replace(/\/+$/, '');
-
-            return {
-              profiles: [
-                {
-                  profileId: 'robot-resources:local',
-                  credential: {
-                    type: 'token',
-                    provider: 'robot-resources',
-                    token: 'n/a',
-                  },
-                },
-              ],
-              configPatch: {
-                models: {
-                  providers: {
-                    'robot-resources': {
-                      baseUrl,
-                      apiKey: 'n/a',
-                      api: 'anthropic-messages',
-                      authHeader: false,
-                      models: ROUTER_MODELS.map(buildModelDefinition),
-                    },
-                  },
-                },
-              },
-              defaultModel: `robot-resources/${ROUTER_MODELS[0]}`,
-              notes: [
-                'Robot Resources Router must be running (npx robot-resources).',
-                'Requests are routed through localhost:3838 for cost optimization.',
-              ],
-            };
-          },
-        },
-      ],
-    });
+    // PR 2: provider registration removed. With in-process routing, OC handles
+    // requests using the user's own provider keys via modelOverride/
+    // providerOverride from before_model_resolve — no proxy provider needed.
+    // See business/refactor-router-in-process.md.
   },
 };
 
 export default robotResourcesPlugin;
-export { DEFAULT_ROUTER_URL, ROUTER_MODELS, askRouter, detectSubscriptionMode };
+export { DEFAULT_ROUTER_URL, askRouter, askRouterHttp, detectSubscriptionMode, getAvailableProviders };

@@ -27,18 +27,19 @@ export const CLASSIFICATION_PROMPT =
   '\n' +
   'User prompt: ';
 
-function _sleepNull(ms) {
-  return new Promise((resolve) => setTimeout(() => resolve(null), ms));
+class ClassifierError extends Error {
+  constructor(reason) {
+    super(reason);
+    this.name = 'ClassifierError';
+    this.reason = reason;
+  }
 }
 
 async function _classifyImpl(prompt) {
   const keyInfo = await getClassifierKey();
-  if (keyInfo === null) return null;
+  if (keyInfo === null) throw new ClassifierError('no_key');
 
-  // Locked decision: JS classifier supports Google only. If the platform
-  // ever serves a non-Google key, fall back to keyword path. See
-  // business/refactor-router-in-process.md PR1 risks.
-  if (keyInfo.provider !== 'google') return null;
+  if (keyInfo.provider !== 'google') throw new ClassifierError('provider_not_google');
 
   const truncated = prompt.slice(0, CLASSIFIER_MAX_PROMPT_LENGTH);
   const fullPrompt = CLASSIFICATION_PROMPT + truncated;
@@ -47,21 +48,48 @@ async function _classifyImpl(prompt) {
   try {
     text = await callGemini(keyInfo.model, keyInfo.apiKey, fullPrompt);
   } catch {
-    return null;
+    throw new ClassifierError('network_error');
   }
 
-  return parseClassification(text.trim(), keyInfo.model);
+  const parsed = parseClassification(text.trim(), keyInfo.model);
+  if (parsed === null) throw new ClassifierError('parse_error');
+  return parsed;
+}
+
+function _withTimeout(promise, ms) {
+  let timer;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new ClassifierError('timeout')), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+}
+
+export async function classifyWithLlmDetailed(prompt, opts = {}) {
+  const { telemetry } = opts;
+
+  if (!prompt || !prompt.trim()) {
+    return { result: null, reason: 'empty_prompt' };
+  }
+
+  let result = null;
+  let reason = null;
+  try {
+    result = await _withTimeout(_classifyImpl(prompt), CLASSIFIER_TIMEOUT_MS);
+  } catch (err) {
+    reason = err instanceof ClassifierError ? err.reason : 'network_error';
+  }
+
+  // empty_prompt is a degenerate caller-side case, not an infrastructure
+  // issue — don't pollute telemetry with it.
+  if (telemetry && reason !== null && reason !== 'empty_prompt') {
+    try {
+      telemetry.emit('classifier_fallback', { reason });
+    } catch { /* never let telemetry errors break routing */ }
+  }
+
+  return { result, reason };
 }
 
 export async function classifyWithLlm(prompt) {
-  if (!prompt || !prompt.trim()) return null;
-
-  try {
-    return await Promise.race([
-      _classifyImpl(prompt),
-      _sleepNull(CLASSIFIER_TIMEOUT_MS),
-    ]);
-  } catch {
-    return null;
-  }
+  return (await classifyWithLlmDetailed(prompt)).result;
 }

@@ -33,9 +33,8 @@ describe('OpenClaw SDK contract: manifest', () => {
     expect(manifest.configSchema.properties.routerUrl.default).toBe('http://localhost:3838');
   });
 
-  it('declares providers array', () => {
-    expect(Array.isArray(manifest.providers)).toBe(true);
-    expect(manifest.providers).toContain('robot-resources');
+  it('does NOT declare a providers array (PR 2: in-process routing replaces proxy provider)', () => {
+    expect(manifest.providers).toBeUndefined();
   });
 });
 
@@ -83,7 +82,7 @@ describe('OpenClaw SDK contract: plugin shape', () => {
     expect(typeof plugin.register).toBe('function');
   });
 
-  it('register calls api.registerProvider with structured object (not positional args)', () => {
+  it('register does NOT call api.registerProvider (PR 2: in-process routing replaces proxy provider)', () => {
     const api = {
       config: {},
       pluginConfig: {},
@@ -94,12 +93,7 @@ describe('OpenClaw SDK contract: plugin shape', () => {
 
     plugin.register(api);
 
-    expect(api.registerProvider).toHaveBeenCalledOnce();
-    const arg = api.registerProvider.mock.calls[0][0];
-    // SDK expects a single object argument, NOT (name, config) positional
-    expect(typeof arg).toBe('object');
-    expect(arg.id).toBe('robot-resources');
-    expect(Array.isArray(arg.auth)).toBe(true);
+    expect(api.registerProvider).not.toHaveBeenCalled();
   });
 
   it('registers before_model_resolve hook for model routing', () => {
@@ -115,96 +109,6 @@ describe('OpenClaw SDK contract: plugin shape', () => {
 
     const hookNames = api.on.mock.calls.map(c => c[0]);
     expect(hookNames).toContain('before_model_resolve');
-  });
-});
-
-// ── Provider Registration Tests ────────────────────────────────
-
-describe('register(api) — API key mode', () => {
-  let plugin;
-
-  beforeEach(async () => {
-    // register() is now idempotent at the work level — without a module reset,
-    // the second test's register() call would skip provider/hook registration.
-    vi.resetModules();
-    const mod = await import('../lib/plugin-core.js');
-    plugin = mod.default;
-  });
-
-  it('registers robot-resources provider with auth flow', () => {
-    const api = {
-      config: {},
-      pluginConfig: {},
-      logger: { info: vi.fn() },
-      registerProvider: vi.fn(),
-      on: vi.fn(),
-    };
-
-    plugin.register(api);
-
-    const provider = api.registerProvider.mock.calls[0][0];
-    expect(provider.id).toBe('robot-resources');
-    expect(provider.label).toBe('Robot Resources');
-    expect(provider.auth).toHaveLength(1);
-    expect(provider.auth[0].kind).toBe('custom');
-    expect(typeof provider.auth[0].run).toBe('function');
-  });
-
-  it('auth run returns configPatch with baseUrl and models', async () => {
-    const api = {
-      config: {},
-      pluginConfig: {},
-      logger: { info: vi.fn() },
-      registerProvider: vi.fn(),
-      on: vi.fn(),
-    };
-
-    plugin.register(api);
-
-    const provider = api.registerProvider.mock.calls[0][0];
-    const result = await provider.auth[0].run({
-      prompter: { text: vi.fn().mockResolvedValue('http://localhost:3838') },
-    });
-
-    expect(result.configPatch.models.providers['robot-resources'].baseUrl).toBe('http://localhost:3838');
-    expect(result.configPatch.models.providers['robot-resources'].api).toBe('anthropic-messages');
-    expect(result.configPatch.models.providers['robot-resources'].models.length).toBeGreaterThan(0);
-    expect(result.defaultModel).toContain('robot-resources/');
-    expect(result.profiles).toHaveLength(1);
-  });
-
-  it('auth run strips trailing slashes from URL', async () => {
-    const api = {
-      config: {},
-      pluginConfig: {},
-      logger: { info: vi.fn() },
-      registerProvider: vi.fn(),
-      on: vi.fn(),
-    };
-
-    plugin.register(api);
-
-    const provider = api.registerProvider.mock.calls[0][0];
-    const result = await provider.auth[0].run({
-      prompter: { text: vi.fn().mockResolvedValue('http://localhost:3838///') },
-    });
-
-    expect(result.configPatch.models.providers['robot-resources'].baseUrl).toBe('http://localhost:3838');
-  });
-
-  it('uses pluginConfig.routerUrl when provided', () => {
-    const api = {
-      config: {},
-      pluginConfig: { routerUrl: 'http://10.0.0.5:4000' },
-      logger: { info: vi.fn() },
-      registerProvider: vi.fn(),
-      on: vi.fn(),
-    };
-
-    plugin.register(api);
-
-    // Provider registered — auth run would use the custom URL
-    expect(api.registerProvider).toHaveBeenCalledOnce();
   });
 });
 
@@ -281,7 +185,7 @@ describe('register(api) — subscription mode', () => {
     expect(hooks).toHaveLength(1);
   });
 
-  it('does NOT register provider in subscription mode (prevents hijacking)', () => {
+  it('does NOT register a provider in either mode (PR 2: in-process routing only)', () => {
     const api = {
       config: { gateway: { auth: { mode: 'token' } } },
       pluginConfig: {},
@@ -363,6 +267,13 @@ describe('plugin_register dedup', () => {
     plugin.register(makeApi());
     expect(pluginRegisterCount()).toBe(1);
   });
+
+  it('plugin_register payload includes mode: "in-process" (PR 2)', () => {
+    plugin.register(makeApi());
+    const event = emitSpy.mock.calls.find((c) => c[0] === 'plugin_register');
+    expect(event).toBeDefined();
+    expect(event[1].mode).toBe('in-process');
+  });
 });
 
 // ── register() work-level idempotency ──────────────────────────
@@ -401,20 +312,6 @@ describe('register() work-level idempotency', () => {
       on: vi.fn(),
     };
   }
-
-  it('registers provider exactly once across multiple register() calls', () => {
-    const api1 = makeApi();
-    const api2 = makeApi();
-    const api3 = makeApi();
-
-    plugin.register(api1);
-    plugin.register(api2);
-    plugin.register(api3);
-
-    expect(api1.registerProvider).toHaveBeenCalledOnce();
-    expect(api2.registerProvider).not.toHaveBeenCalled();
-    expect(api3.registerProvider).not.toHaveBeenCalled();
-  });
 
   it('registers hooks exactly once across multiple register() calls', () => {
     const api1 = makeApi();
@@ -560,12 +457,6 @@ describe('exports', () => {
   it('exports DEFAULT_ROUTER_URL from plugin-core', async () => {
     const mod = await import('../lib/plugin-core.js');
     expect(mod.DEFAULT_ROUTER_URL).toBe('http://localhost:3838');
-  });
-
-  it('exports ROUTER_MODELS as non-empty array from plugin-core', async () => {
-    const mod = await import('../lib/plugin-core.js');
-    expect(Array.isArray(mod.ROUTER_MODELS)).toBe(true);
-    expect(mod.ROUTER_MODELS.length).toBeGreaterThan(0);
   });
 
   it('exports askRouter function from plugin-core', async () => {
