@@ -1,5 +1,31 @@
 # @robot-resources/openclaw-plugin
 
+## 0.6.0
+
+### Minor Changes
+
+- b9e8a7c: Route in-process: the plugin now performs routing decisions locally in JS
+  instead of calling the Python router daemon over HTTP. HTTP fallback retained
+  for one release as a safety net (deleted in PR 3).
+
+  The keyword fast-path handles ~70% of prompts in <5ms; the slow path calls
+  the platform classifier (Gemini) for low-confidence prompts. Hybrid provider
+  detection inspects both `api.config.models.providers` and the standard env
+  vars (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_API_KEY` /
+  `GEMINI_API_KEY`) — when no providers are detected, the plugin emits
+  `no_providers_detected` telemetry and skips the override so OC falls
+  through to its own default model.
+
+  `api.registerProvider(...)` and the `providers` field in the manifest are
+  removed: with in-process routing OC handles requests using the user's own
+  provider keys via `modelOverride`/`providerOverride` from the
+  `before_model_resolve` hook. Subscription-mode detection (dead since
+  Anthropic blocked subscription tokens 2026-04-04) is left wired in PR 2 to
+  keep this diff tight; cleanup deferred to PR 3 or PR 4.
+
+  This release also publishes the PR 1 routing port (`lib/routing/`) which
+  shipped without a changeset.
+
 ## 0.5.12
 
 ### Patch Changes
