@@ -1,5 +1,16 @@
 # @robot-resources/openclaw-plugin
 
+## 0.5.12
+
+### Patch Changes
+
+- 5a998c8: Four coordinated fixes so the router actually survives past the wizard:
+
+  - **CLI (service.js):** systemd-user install now verifies `loginctl enable-linger` actually took effect (the Finland signup on 2026-04-23 proved the silent-failure case is real) and installs a `crontab @reboot` belt alongside the user unit so the router comes back after reboot even when linger is denied by polkit.
+  - **Plugin (plugin-heal.js):** new parallel healer runs on every OpenClaw gateway start. Pings `/health`, and if the router is dead it runs enable-linger, tries `systemctl --user restart`, falls back to a detached spawn, and polls until healthy. Acquires a PID-based lock (`~/.robot-resources/.heal.lock`) to avoid racing the router's own self_heal. Throttled to once per hour via a separate marker. Plugin now rescues users whose router died post-install — the router's own self_heal can't reach them.
+  - **Worker + plugin (response channel):** the telemetry POST response now optionally carries `heal_hints` — a strict allowlist (`reheal_router` | `rerun_wizard`). Server decides based on the current event batch; plugin maps recognized hints to local actions (force-run the heal bypassing the throttle; surface a nag asking the user to re-run `npx robot-resources`). No arbitrary commands. Plugin silently drops anything outside the allowlist.
+  - **Install_complete payload:** adds `linger_enabled` and `crontab_fallback` so we can tell which systemd-user installs are live-forever setups vs dying-on-logout.
+
 ## 0.5.11
 
 ### Patch Changes

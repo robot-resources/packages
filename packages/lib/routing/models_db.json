@@ -1,0 +1,189 @@
+[
+  {
+    "name": "gpt-5.4",
+    "provider": "openai",
+    "cost_per_1k_input": 0.0025,
+    "cost_per_1k_output": 0.015,
+    "capabilities": {
+      "overall": 0.85,
+      "coding": 0.86,
+      "reasoning": 0.88,
+      "analysis": 0.85,
+      "simple_qa": 0.93,
+      "creative": 0.8
+    },
+    "max_tokens": 1050000,
+    "last_updated": "2026-03-24",
+    "elo_source": "arena.ai (March 2026)"
+  },
+  {
+    "name": "gpt-5.4-mini",
+    "provider": "openai",
+    "cost_per_1k_input": 0.00075,
+    "cost_per_1k_output": 0.0045,
+    "capabilities": {
+      "overall": 0.65,
+      "coding": 0.68,
+      "reasoning": 0.65,
+      "analysis": 0.62,
+      "simple_qa": 0.8,
+      "creative": 0.58
+    },
+    "max_tokens": 272000,
+    "last_updated": "2026-04-05",
+    "elo_source": "arena.ai (March 2026)"
+  },
+  {
+    "name": "gpt-5.4-nano",
+    "provider": "openai",
+    "cost_per_1k_input": 0.0002,
+    "cost_per_1k_output": 0.00125,
+    "capabilities": {
+      "overall": 0.5,
+      "coding": 0.57,
+      "reasoning": 0.48,
+      "analysis": 0.48,
+      "simple_qa": 0.73,
+      "creative": 0.43
+    },
+    "max_tokens": 272000,
+    "last_updated": "2026-04-05",
+    "elo_source": "arena.ai (March 2026)"
+  },
+  {
+    "name": "o3",
+    "provider": "openai",
+    "cost_per_1k_input": 0.002,
+    "cost_per_1k_output": 0.008,
+    "capabilities": {
+      "overall": 0.76,
+      "coding": 0.8,
+      "reasoning": 0.95,
+      "analysis": 0.85,
+      "simple_qa": 0.73,
+      "creative": 0.58
+    },
+    "max_tokens": 200000,
+    "last_updated": "2026-03-24",
+    "elo_source": "arena.ai (March 2026)"
+  },
+  {
+    "name": "o4-mini",
+    "provider": "openai",
+    "cost_per_1k_input": 0.0011,
+    "cost_per_1k_output": 0.0044,
+    "capabilities": {
+      "overall": 0.65,
+      "coding": 0.74,
+      "reasoning": 0.8,
+      "analysis": 0.69,
+      "simple_qa": 0.68,
+      "creative": 0.48
+    },
+    "max_tokens": 200000,
+    "last_updated": "2026-03-24",
+    "elo_source": "arena.ai (March 2026)"
+  },
+  {
+    "name": "claude-opus-4-6",
+    "provider": "anthropic",
+    "cost_per_1k_input": 0.005,
+    "cost_per_1k_output": 0.025,
+    "capabilities": {
+      "overall": 0.96,
+      "coding": 0.97,
+      "reasoning": 0.95,
+      "analysis": 0.94,
+      "simple_qa": 0.95,
+      "creative": 0.95
+    },
+    "max_tokens": 1000000,
+    "last_updated": "2026-03-24",
+    "elo_source": "arena.ai (March 2026)"
+  },
+  {
+    "name": "claude-sonnet-4-6",
+    "provider": "anthropic",
+    "cost_per_1k_input": 0.003,
+    "cost_per_1k_output": 0.015,
+    "capabilities": {
+      "overall": 0.86,
+      "coding": 0.94,
+      "reasoning": 0.85,
+      "analysis": 0.83,
+      "simple_qa": 0.9,
+      "creative": 0.88
+    },
+    "max_tokens": 1000000,
+    "last_updated": "2026-04-05",
+    "elo_source": "arena.ai (March 2026)"
+  },
+  {
+    "name": "claude-haiku-4-5-20251001",
+    "provider": "anthropic",
+    "cost_per_1k_input": 0.001,
+    "cost_per_1k_output": 0.005,
+    "capabilities": {
+      "overall": 0.7,
+      "coding": 0.69,
+      "reasoning": 0.65,
+      "analysis": 0.66,
+      "simple_qa": 0.85,
+      "creative": 0.63
+    },
+    "max_tokens": 200000,
+    "last_updated": "2026-03-24",
+    "elo_source": "arena.ai (March 2026)"
+  },
+  {
+    "name": "gemini-2.5-pro",
+    "provider": "google",
+    "cost_per_1k_input": 0.00125,
+    "cost_per_1k_output": 0.01,
+    "capabilities": {
+      "overall": 0.81,
+      "coding": 0.58,
+      "reasoning": 0.8,
+      "analysis": 0.81,
+      "simple_qa": 0.93,
+      "creative": 0.75
+    },
+    "max_tokens": 1048576,
+    "last_updated": "2026-03-24",
+    "elo_source": "arena.ai (March 2026)"
+  },
+  {
+    "name": "gemini-2.5-flash",
+    "provider": "google",
+    "cost_per_1k_input": 0.0003,
+    "cost_per_1k_output": 0.0025,
+    "capabilities": {
+      "overall": 0.71,
+      "coding": 0.51,
+      "reasoning": 0.68,
+      "analysis": 0.69,
+      "simple_qa": 0.85,
+      "creative": 0.63
+    },
+    "max_tokens": 1048576,
+    "last_updated": "2026-03-24",
+    "elo_source": "arena.ai (March 2026)"
+  },
+  {
+    "name": "gemini-2.5-flash-lite",
+    "provider": "google",
+    "cost_per_1k_input": 0.0001,
+    "cost_per_1k_output": 0.0004,
+    "capabilities": {
+      "overall": 0.62,
+      "coding": 0.46,
+      "reasoning": 0.55,
+      "analysis": 0.58,
+      "simple_qa": 0.78,
+      "creative": 0.5
+    },
+    "max_tokens": 1048576,
+    "last_updated": "2026-03-24",
+    "elo_source": "arena.ai (March 2026)"
+  }
+]
