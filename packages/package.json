@@ -1,6 +1,6 @@
 {
   "name": "@robot-resources/cli-core",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Shared CLI utilities — auth, config, login (internal)",
   "type": "module",
   "main": "./index.mjs",

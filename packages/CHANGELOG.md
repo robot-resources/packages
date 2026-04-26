@@ -1,5 +1,67 @@
 # @robot-resources/cli-core
 
+## 0.1.8
+
+### Patch Changes
+
+- 5876289: PR 2.5: in-process HTTP server replaces the dead `localhost:3838` daemon
+  path AND consolidates the JS code into the router tool's home folder.
+
+  What shipped:
+
+  - **Router source moved** from `packages/openclaw-plugin/` (the wrong place
+    — the OC plugin was always router-specific functionality, not a separate
+    product) into `router/packages/router/` (the router tool's npm package
+    home, mirroring `scraper/packages/{scraper,scraper-mcp,...}`). The npm
+    package `@robot-resources/router` jumps 2.3.6 → 3.0.0; its v2.x shape
+    was a Python-CLI wrapper that no longer exists.
+
+  - **OC plugin (`openclaw-plugin` id, install path
+    `~/.openclaw/extensions/openclaw-plugin/`) is unchanged from a user's
+    perspective** — only the npm distribution shifted. `npx robot-resources`
+    now installs `@robot-resources/router` instead of
+    `@robot-resources/openclaw-plugin` (deprecated).
+
+  - **In-process HTTP server**: plugin starts a node http server on
+    `127.0.0.1:18790` at register time. OC's standard provider catalog
+    dispatch sends LLM calls there; the handler runs the JS classifier on the
+    user prompt, picks an Anthropic model, fetches api.anthropic.com directly
+    with the user's existing key, and pipes the SSE response back unchanged.
+
+  - **Daemon-install code DELETED** from the unified CLI:
+    `packages/cli/lib/{service.js, python-bridge.js}` (740 + 38 LOC),
+    `packages/cli-core/{python-bridge.mjs, uv-bootstrap.mjs}` (272 + 336 LOC),
+
+    - dead Python install / service registration / health probe branches in
+      `packages/cli/lib/wizard.js` (~150 LOC stripped). The wizard now does
+      exactly four things: provision api_key → install OC plugin → register
+      scraper MCP → restart OC. No Python, no venv, no systemd, no port probe.
+
+  - **`packages/openclaw-plugin/` DELETED** entirely (moved to new home).
+    Last published as `@robot-resources/openclaw-plugin@0.6.0`; that package
+    is dead going forward — npm consumers should depend on
+    `@robot-resources/router@^3` instead.
+
+  - **`lib/plugin-heal.js` DELETED** — daemon-revive code, no daemon to heal.
+
+  Verified end-to-end on the test droplet 2026-04-26: real Telegram messages
+  routed correctly, `route_completed mode=in-process` events in Supabase, no
+  errors. Plugin source at the new location works identically to the
+  pre-restructure version.
+
+  Why the architecture pivot (long version in
+  business/refactor-router-in-process.md):
+
+  PR 2's plugin-SDK hook approach was dead in OC 2026.4.24's agent runtime —
+  neither `before_model_resolve` nor `before_agent_start` nor `wrapStreamFn`
+  fire from the path 100% of users (Telegram→agent) take. PR 2 also had a
+  silent sync-register failure that silently rolled back hook commits. Option
+  4 keeps OC's standard catalog-dispatch wire shape but collapses what was
+  the Python daemon into the plugin's own node process.
+
+  Stranded users on plugin 0.6.0 have to reinstall via `npx robot-resources`
+  to pick up the fix.
+
 ## 0.1.7
 
 ### Patch Changes
