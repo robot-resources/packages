@@ -1,40 +1,41 @@
 {
-  "name": "@robot-resources/openclaw-plugin",
-  "version": "0.6.0",
-  "description": "Robot Resources plugin for OpenClaw — cost-optimized model routing and token-compressed web fetching",
+  "name": "@robot-resources/cli-core",
+  "version": "0.1.7",
+  "description": "Shared CLI utilities — auth, config, login (internal)",
   "type": "module",
-  "main": "index.js",
+  "main": "./index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./auth.mjs": "./auth.mjs",
+    "./config.mjs": "./config.mjs",
+    "./login.mjs": "./login.mjs",
+    "./python-bridge.mjs": "./python-bridge.mjs"
+  },
   "scripts": {
     "test": "vitest",
     "test:run": "vitest run"
   },
   "files": [
-    "index.js",
-    "openclaw.plugin.json",
-    "lib"
+    "*.mjs"
   ],
-  "keywords": [
-    "openclaw",
-    "plugin",
-    "robot-resources",
-    "llm",
-    "routing",
-    "ai",
-    "cost-optimization"
-  ],
+  "devDependencies": {
+    "vitest": "^1.2.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/robot-resources/packages.git",
-    "directory": "packages/openclaw-plugin"
+    "directory": "packages/cli-core"
   },
   "homepage": "https://robotresources.ai",
-  "license": "MIT",
-  "openclaw": {
-    "extensions": [
-      "./index.js"
-    ]
+  "bugs": {
+    "url": "https://github.com/robot-resources/robot-resources/issues"
   },
-  "devDependencies": {
-    "vitest": "^3.0.0"
+  "license": "MIT",
+  "author": "Robot Resources Team",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
