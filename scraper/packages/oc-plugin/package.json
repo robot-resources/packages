@@ -1,0 +1,51 @@
+{
+  "name": "@robot-resources/scraper-oc-plugin",
+  "version": "0.2.0",
+  "description": "Robot Resources scraper OC plugin — redirects web_fetch tool calls to scraper_compress_url for token-efficient web reading inside OpenClaw.",
+  "author": "Robot Resources",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "openclaw.plugin.json",
+    "lib"
+  ],
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "robot-resources",
+    "scraper",
+    "compression",
+    "web-fetch",
+    "ai",
+    "agents"
+  ],
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robot-resources/robot-resources.git",
+    "directory": "scraper/packages/scraper-oc-plugin"
+  },
+  "homepage": "https://robotresources.ai",
+  "bugs": {
+    "url": "https://github.com/robot-resources/robot-resources/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

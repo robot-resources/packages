@@ -1,10 +1,14 @@
 {
-  "name": "@robot-resources/scraper-tracking",
-  "version": "0.1.0",
-  "description": "Local usage tracking for AI agents using Scraper. Track compression savings and generate marketing messages.",
+  "name": "@robot-resources/scraper",
+  "version": "0.4.0",
+  "description": "Context compression for AI agents. Fetch -> Extract -> Convert pipeline without LLM dependency.",
   "author": "Robot Resources",
   "license": "MIT",
   "type": "module",
+  "bin": {
+    "robot-resources-scraper": "./bin/setup.js",
+    "scraper-mcp": "./dist/mcp-entry.js"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,10 +22,22 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./tracking": {
+      "import": {
+        "types": "./dist/tracking.d.ts",
+        "default": "./dist/tracking.js"
+      },
+      "require": {
+        "types": "./dist/tracking.d.cts",
+        "default": "./dist/tracking.cjs"
+      }
     }
   },
   "files": [
+    "bin",
     "dist",
+    "oc-plugin",
     "README.md"
   ],
   "scripts": {
@@ -29,14 +45,38 @@
     "dev": "tsup --watch",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "benchmark": "npx tsx scripts/benchmark-compare.ts",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.0",
+    "@mozilla/readability": "^0.5.0",
+    "linkedom": "^0.16.11",
+    "robots-parser": "^3.0.1",
+    "turndown": "^7.1.3",
+    "zod": "^3.25.0"
+  },
   "devDependencies": {
+    "@types/node": "^25.2.2",
+    "@types/turndown": "^5.0.4",
     "tsup": "^8.0.1",
     "typescript": "^5.3.3",
     "@vitest/coverage-v8": "^1.2.0",
     "vitest": "^1.2.0"
+  },
+  "peerDependencies": {
+    "impit": ">=0.11.0",
+    "playwright": ">=1.40.0"
+  },
+  "peerDependenciesMeta": {
+    "impit": {
+      "optional": true
+    },
+    "playwright": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=18.0.0"
@@ -44,20 +84,20 @@
   "keywords": [
     "ai",
     "agents",
-    "tracking",
-    "analytics",
-    "scraper",
+    "context",
     "compression",
-    "marketing",
-    "llm",
-    "tokens"
+    "markdown",
+    "web",
+    "scraping",
+    "tokens",
+    "llm"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/robot-resources/robot-resources.git",
-    "directory": "scraper/packages/tracking"
+    "url": "git+https://github.com/robot-resources/packages.git",
+    "directory": "scraper/packages/scraper"
   },
-  "homepage": "https://scraper.robotresources.ai",
+  "homepage": "https://robotresources.ai",
   "bugs": {
     "url": "https://github.com/robot-resources/robot-resources/issues"
   },

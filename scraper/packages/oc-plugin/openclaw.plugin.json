@@ -1,0 +1,10 @@
+{
+  "id": "robot-resources-scraper-oc-plugin",
+  "name": "Robot Resources Scraper Hook",
+  "description": "Redirects web_fetch tool calls to scraper_compress_url for token-efficient web reading",
+  "configSchema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  }
+}
