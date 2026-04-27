@@ -1,14 +1,14 @@
 # @robot-resources/router
 
-## 3.0.1
+## 4.0.1
 
 ### Patch Changes
 
-- PR 3 internal cleanup. No behavior change vs 3.0.0 in the published files (`index.js`, `openclaw.plugin.json`, `lib/`). The repo around the package was significantly trimmed (Python source, Docker scaffolding, `@robot-resources/router-mcp` package, CI Python jobs all deleted) but none of that ships in this tarball.
+- PR 3 internal cleanup. No behavior change vs 4.0.0 in the published files (`index.js`, `openclaw.plugin.json`, `lib/`). The repo around the package was significantly trimmed (Python source, Docker scaffolding, `@robot-resources/router-mcp` package, CI Python jobs all deleted) but none of that ships in this tarball.
 
-  Note on numbering: PR 2.5's release machinery briefly published `@robot-resources/router@4.0.0` and then unpublished it. The 4.0.0 version number is permanently tombstoned on npm — it can never be republished. We continue from npm's actual latest (3.0.0) so the published-history line is contiguous and any future tombstone glitches don't compound.
+  Note on numbering: PR 2.5's release published `@robot-resources/router@4.0.0` and `4.0.0` got unpublished within npm's window. `4.0.1` is the resumed line from PR 3 onward.
 
-## 3.0.0
+## 4.0.0
 
 ### Major Changes
 
