@@ -103,13 +103,14 @@ describe('runNonOcWizard — --for=<target> direct routing', () => {
     expect(info).toHaveBeenCalledWith(expect.stringContaining('npm install @robot-resources/router'));
   });
 
-  it('runs the Python path when target=python (inline httpx recipe, no SDK)', async () => {
+  it('runs the Python path when target=python (pip install + SDK + httpx fallback hint)', async () => {
     await runNonOcWizard({ nonInteractive: true, target: 'python' });
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('httpx.post'));
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('api.robotresources.ai/v1/route'));
-    // Must NOT advertise the deprecated PyPI stub.
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('pip install robot-resources'));
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('from robot_resources.router import route'));
+    // Must NOT recommend the deprecated robot-resources-router PyPI name.
     const calls = info.mock.calls.map((c) => c[0]).join('\n');
     expect(calls).not.toContain('pip install robot-resources-router');
+    expect(calls).not.toContain('rr_router');
   });
 
   it('runs the MCP path when target=cursor and Cursor is installed', async () => {
@@ -173,7 +174,7 @@ describe('runNonOcWizard — interactive menu', () => {
     select.mockResolvedValue('python');
     await runNonOcWizard({ nonInteractive: false, target: null });
     expect(select).toHaveBeenCalledOnce();
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('httpx.post'));
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('pip install robot-resources'));
   });
 
   it('preselects "js" when cwd looks like a JS project', async () => {
