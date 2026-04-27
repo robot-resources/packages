@@ -219,12 +219,28 @@ Verified across 41 pages (March 2026):
 - Node.js 18+
 - ESM or CommonJS
 
+## MCP server
+
+`@robot-resources/scraper` ships an MCP server bin — `scraper-mcp` — that exposes the scrape/crawl tools to AI agents (Cursor, Claude Code, OpenClaw, etc.) over MCP. Run it manually:
+
+```bash
+npx -y @robot-resources/scraper scraper-mcp
+```
+
+Or let the unified wizard wire it into your tool's MCP config:
+
+```bash
+npx robot-resources --for=cursor       # writes ~/.cursor/mcp.json
+npx robot-resources --for=claude-code  # writes ~/.claude/settings.json
+```
+
+The standalone packages `@robot-resources/scraper-mcp`, `@robot-resources/scraper-tracking`, and `@robot-resources/scraper-oc-plugin` are **deprecated on npm** — they were folded into this package as the `scraper-mcp` bin, the `./tracking` subpath export, and the `./oc-plugin` subfolder export, respectively. Migrate by importing from `@robot-resources/scraper` directly.
+
 ## Related
 
-- [@robot-resources/scraper-mcp](https://npm.im/@robot-resources/scraper-mcp) - MCP server for AI agents
-- [@robot-resources/scraper-tracking](https://npm.im/@robot-resources/scraper-tracking) - Usage tracking
-- [scraper.robotresources.ai](https://scraper.robotresources.ai) - Hosted API
-- [Robot Resources](https://robotresources.ai) - Human Resources, but for your AI agents
+- [Robot Resources](https://robotresources.ai) — Human Resources, but for your AI agents
+- [`robot-resources` on npm](https://www.npmjs.com/package/robot-resources) — the unified `npx` wizard
+- [`@robot-resources/router`](https://www.npmjs.com/package/@robot-resources/router) — sister product (smart model selection)
 
 ## License
 

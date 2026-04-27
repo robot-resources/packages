@@ -1,142 +1,92 @@
 # @robot-resources/router
 
-> Intelligent LLM cost optimization via local proxy.
+> Smart model selection for AI agents — pick the cheapest LLM that can handle each prompt.
 
-Automatically route each LLM request to the cheapest model that can handle it. **60-90% cost savings** with no quality loss.
+The router classifies a prompt by task type (coding / reasoning / analysis / simple_qa / creative / general), filters the model catalog by capability, and returns the cheapest qualifying model. Typically saves 60–90% on coding/QA mixes vs always picking the top model.
 
-## Quick Start
+## Two ways to use it
 
-```bash
-# Run directly (no install needed) — runs the setup wizard on first invocation
-npx @robot-resources/router
+### As an OpenClaw plugin (default `npx robot-resources` install)
 
-# Or install globally
-npm install -g @robot-resources/router
-rr-router
-```
-
-On first run, the wizard:
-
-1. Installs the Python router engine (venv + pip) in `~/.robot-resources/.venv/`
-2. Registers the router as a background service (launchd on macOS, systemd on Linux)
-3. Auto-configures detected AI tools (Claude Code, Cursor) as MCP clients
-4. If no tools are detected, prints copy-pasteable SDK `base_url` instructions
-
-After that, calls like `rr-router start`, `rr-router status`, or `rr-router report` skip the wizard. Use `--setup` to re-run it.
-
-## Requirements
-
-- **Node.js** >= 18.0.0
-- **Python** >= 3.10 (auto-detected; used for the routing engine)
-
-## Enterprise / Docker
-
-Inside Docker, the wizard skips service registration and prints three ways to run the router: Dockerfile `CMD`, Compose sidecar, or background process. Set `RR_API_KEY` in advance to bypass the auto-signup step entirely.
-
-## Enterprise setup (admin-provisioned keys)
-
-For fleets where an admin distributes API keys to many agents, pre-set `RR_API_KEY` and the wizard skips signup:
+The router IS the OC plugin. It registers an in-process HTTP server on `127.0.0.1:18790` inside OC's gateway process, dispatches LLM calls there, runs the keyword classifier, picks a model, and forwards the request to the user's configured provider (currently Anthropic) using the user's existing API key. **No daemon, no Python, no system service.** Lifetime is tied to the OC gateway — the server starts when OC loads the plugin and dies when OC exits.
 
 ```bash
-# Admin: create N keys in the dashboard via POST /v1/keys, then on each agent:
-RR_API_KEY=rr_live_... npx @robot-resources/router
+npx robot-resources                # installs the plugin into ~/.openclaw/extensions/robot-resources-router/
 ```
 
-This bypasses the per-IP signup rate limit and avoids one claim URL per agent. All telemetry lands under the admin's account.
+The unified wizard handles plugin install, scraper MCP registration, and config patching. See [`robot-resources` on npm](https://www.npmjs.com/package/robot-resources) for the wizard.
 
-## Pointing your SDK at the Router
+### As a public JS library (any agent framework)
 
-Two SDKs are supported via the `base_url` override. Note the difference:
+For agents that don't run inside OpenClaw — LangChain, LangGraph.js, Mastra, etc. — import the routing decision directly:
 
 ```bash
-# OpenAI SDK / compatible clients — include /v1
-export OPENAI_BASE_URL=http://localhost:3838/v1
-#   OpenAI(base_url="http://localhost:3838/v1")
-
-# Anthropic SDK — NO /v1 (the SDK appends /v1/messages itself)
-export ANTHROPIC_BASE_URL=http://localhost:3838
-#   Anthropic(base_url="http://localhost:3838")
+npm install @robot-resources/router
 ```
 
-For Gemini, route through the OpenAI-compatible client with a Gemini model name:
+```js
+import { routePrompt } from '@robot-resources/router/routing';
 
-```python
-from openai import OpenAI
-client = OpenAI(base_url="http://localhost:3838/v1", api_key="not-needed")
-client.chat.completions.create(model="gemini-2.5-flash", ...)
+const decision = routePrompt('write a python function that reverses a string');
+// {
+//   selected_model: 'claude-haiku-4-5',
+//   provider: 'anthropic',
+//   savings_percent: 68.0,
+//   task_type: 'coding',
+//   capability_score: 0.86,
+//   reasoning: '...',
+// }
 ```
 
-The router has no native Google `v1beta` endpoint — `GOOGLE_API_BASE` is not a real env var.
+Pure ESM, zero dependencies. The classifier runs offline on the keyword fast-path (~5ms, covers ~70% of prompts); slow-path classifier needs a network call to Gemini (configurable via `asyncRoutePrompt`).
 
-## How It Works
+```js
+import { asyncRoutePrompt } from '@robot-resources/router/routing';
 
-```
-Your Agent (Claude Code, Cursor, etc.)
-    |
-    | POST /v1/chat/completions  (OpenAI-compatible)
-    | model: "auto"
-    v
-┌─────────────────────────────┐
-│  Robot Resources Router     │
-│  localhost:3838              │
-│                             │
-│  1. Detect task type        │
-│  2. Find cheapest model     │
-│  3. Forward to provider     │
-│  4. Track cost savings      │
-└─────────────────────────────┘
-    |
-    v
-  Anthropic / OpenAI / Google
+// Async path — same shape, may call Gemini for ambiguous prompts.
+const decision = await asyncRoutePrompt(prompt);
 ```
 
-Each message is classified (coding, reasoning, simple_qa, etc.) and routed to the cheapest model with sufficient capability for that task.
+The routing module never reads user provider keys — `modelsDb` and `availableProviders` are caller parameters. Safe to use in non-OC contexts.
 
-## Example Savings
+## Other consumption paths
 
-```
-Turn 1: "hello"                    → gemini-2.0-flash-lite        $0.0000
-Turn 2: "what's 2+2?"              → gemini-2.0-flash-lite        $0.0000
-Turn 3: "refactor this React code" → gpt-4o-mini                  $0.0002
-Turn 4: "thanks, looks good"       → gemini-2.0-flash-lite        $0.0000
-─────────────────────────────────────────────────────────────────────────
-Total with RR:       $0.0002
-Without RR (gpt-4o): $0.0075
-Savings:             97%
-```
+| Path | Where | When |
+|---|---|---|
+| **HTTP API** | `POST https://api.robotresources.ai/v1/route` | Any language with `curl` / `fetch`. Authed by API key, 100 req/min per key. See [docs](https://robotresources.ai/docs/http-api). |
+| **Python SDK** | `pip install robot-resources` → `from robot_resources.router import route` | Python agents (LangChain, LlamaIndex, CrewAI, etc.). Thin httpx client over `/v1/route`. |
+| **OC plugin** | `npx robot-resources` | OpenClaw users — the in-process integration described above. |
 
-## Configuration
+## What it ships
 
-Set provider API keys as environment variables:
+- `index.js` — OC plugin entry (sync register shim)
+- `lib/local-server.js` — in-process HTTP server (Anthropic-messages compatible)
+- `lib/routing/` — classifier + selector + models catalog (importable as `@robot-resources/router/routing`)
+- `lib/telemetry.js` — opt-in telemetry helper (importable as `@robot-resources/router/telemetry`)
+- `lib/self-update.js` — daily npm version poll + atomic swap
 
-```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-export OPENAI_API_KEY="sk-..."
-export GOOGLE_API_KEY="..."
-```
+## Public exports
 
-## CLI Commands
-
-```bash
-rr-router start              # Start proxy on localhost:3838
-rr-router start --port 4000  # Custom port
-rr-router status             # Show status
-rr-router report weekly      # Cost savings report (7 days)
-rr-router report monthly     # Cost savings report (30 days)
+```js
+// from package.json `exports`
+import x from '@robot-resources/router';            // OC plugin shim (default)
+import x from '@robot-resources/router/routing';    // routing API (routePrompt, asyncRoutePrompt, MODELS_DB)
+import x from '@robot-resources/router/telemetry';  // createTelemetry factory
 ```
 
-## Agent Integration
+## Provider support
 
-Point any OpenAI-compatible agent to the proxy:
+Today: Anthropic (in-process server forwards to `api.anthropic.com`). The classifier catalog includes OpenAI + Google + Anthropic models, so the JS library can return decisions for any provider — but the in-process server's request forwarding is single-lab. Multi-lab dispatch is a future expansion that lands in a follow-up.
 
-```json
-{
-  "baseUrl": "http://localhost:3838",
-  "model": "auto"
-}
-```
+## Configuration (OC plugin path)
 
-The proxy handles routing transparently. Your agent doesn't need to know about model selection.
+The plugin reads the user's Anthropic key from `~/.openclaw/agents/<id>/agent/auth-profiles.json` (the OC native auth store). The user never enters a key into Robot Resources directly. We never see, store, or transmit user provider keys.
+
+`~/.robot-resources/config.json` stores the anonymous Robot Resources `api_key` used for telemetry — provisioned at install via `POST /v1/auth/signup`. Optional. Routing works without it.
+
+## Telemetry
+
+Fire-and-forget, opt-in. Events emitted from the in-process server: `local_server_started`, `route_completed`, `route_failed`, `local_server_no_key`, `local_server_upstream_failed`. Events from the JS library (when `telemetry` is wired by the consumer): `route_via_lib`. Disable: don't supply an `apiKey`.
 
 ## License
 
