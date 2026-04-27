@@ -1,0 +1,223 @@
+[
+  {
+    "expected": {
+      "count": 5,
+      "names": [
+        "claude-opus-4-6",
+        "claude-sonnet-4-6",
+        "gpt-5.4",
+        "o3",
+        "o4-mini"
+      ]
+    },
+    "kind": "capable",
+    "task_type": "coding",
+    "threshold": 0.7
+  },
+  {
+    "expected": {
+      "count": 3,
+      "names": [
+        "claude-opus-4-6",
+        "claude-sonnet-4-6",
+        "gpt-5.4"
+      ]
+    },
+    "kind": "capable",
+    "task_type": "coding",
+    "threshold": 0.85
+  },
+  {
+    "expected": {
+      "count": 10,
+      "names": [
+        "claude-haiku-4-5-20251001",
+        "claude-opus-4-6",
+        "claude-sonnet-4-6",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-pro",
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gpt-5.4-nano",
+        "o3"
+      ]
+    },
+    "kind": "capable",
+    "task_type": "simple_qa",
+    "threshold": 0.7
+  },
+  {
+    "expected": {
+      "count": 2,
+      "names": [
+        "claude-opus-4-6",
+        "claude-sonnet-4-6"
+      ]
+    },
+    "kind": "capable",
+    "task_type": "creative",
+    "threshold": 0.85
+  },
+  {
+    "expected": {
+      "count": 0,
+      "names": []
+    },
+    "kind": "capable",
+    "task_type": "analysis",
+    "threshold": 0.95
+  },
+  {
+    "expected": {
+      "count": 7,
+      "names": [
+        "claude-haiku-4-5-20251001",
+        "claude-opus-4-6",
+        "claude-sonnet-4-6",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gpt-5.4",
+        "o3"
+      ]
+    },
+    "kind": "capable",
+    "task_type": "general",
+    "threshold": 0.7
+  },
+  {
+    "expected": {
+      "ranked_names": [
+        "o4-mini",
+        "o3",
+        "gpt-5.4",
+        "claude-sonnet-4-6",
+        "claude-opus-4-6"
+      ],
+      "selected": "o4-mini"
+    },
+    "kind": "cheapest",
+    "task_type": "coding",
+    "threshold": 0.7
+  },
+  {
+    "expected": {
+      "ranked_names": [
+        "o4-mini",
+        "gemini-2.5-pro",
+        "o3",
+        "gpt-5.4",
+        "claude-sonnet-4-6",
+        "claude-opus-4-6"
+      ],
+      "selected": "o4-mini"
+    },
+    "kind": "cheapest",
+    "task_type": "reasoning",
+    "threshold": 0.7
+  },
+  {
+    "expected": {
+      "ranked_names": [
+        "gemini-2.5-flash-lite",
+        "gpt-5.4-nano",
+        "gemini-2.5-flash",
+        "gpt-5.4-mini",
+        "claude-haiku-4-5-20251001",
+        "gemini-2.5-pro",
+        "o3",
+        "gpt-5.4",
+        "claude-sonnet-4-6",
+        "claude-opus-4-6"
+      ],
+      "selected": "gemini-2.5-flash-lite"
+    },
+    "kind": "cheapest",
+    "task_type": "simple_qa",
+    "threshold": 0.7
+  },
+  {
+    "baseline": "claude-opus-4-6",
+    "expected": {
+      "baseline_cost": 0.005,
+      "baseline_model": "claude-opus-4-6",
+      "savings_per_1k_tokens": 0.0049,
+      "savings_percent": 98.0,
+      "selected_cost": 0.0001,
+      "selected_model": "gemini-2.5-flash-lite"
+    },
+    "kind": "savings",
+    "selected": "gemini-2.5-flash-lite"
+  },
+  {
+    "baseline": "claude-sonnet-4-6",
+    "expected": {
+      "baseline_cost": 0.003,
+      "baseline_model": "claude-sonnet-4-6",
+      "savings_per_1k_tokens": 0.00225,
+      "savings_percent": 75.0,
+      "selected_cost": 0.00075,
+      "selected_model": "gpt-5.4-mini"
+    },
+    "kind": "savings",
+    "selected": "gpt-5.4-mini"
+  },
+  {
+    "baseline": "claude-opus-4-6",
+    "expected": {
+      "baseline_cost": 0.005,
+      "baseline_model": "claude-opus-4-6",
+      "savings_per_1k_tokens": 0.0,
+      "savings_percent": 0.0,
+      "selected_cost": 0.005,
+      "selected_model": "claude-opus-4-6"
+    },
+    "kind": "savings",
+    "selected": "claude-opus-4-6"
+  },
+  {
+    "expected": {
+      "count": 1,
+      "names": [
+        "edge-just-above"
+      ]
+    },
+    "kind": "capable_synthetic",
+    "synthetic_models": [
+      {
+        "capabilities": {
+          "analysis": 0.5,
+          "coding": 0.7000000001,
+          "creative": 0.5,
+          "overall": 0.7,
+          "reasoning": 0.5,
+          "simple_qa": 0.5
+        },
+        "cost_per_1k_input": 0.001,
+        "cost_per_1k_output": 0.005,
+        "last_updated": "2026-04-24",
+        "max_tokens": 100000,
+        "name": "edge-just-above",
+        "provider": "openai"
+      },
+      {
+        "capabilities": {
+          "analysis": 0.5,
+          "coding": 0.6999999999,
+          "creative": 0.5,
+          "overall": 0.7,
+          "reasoning": 0.5,
+          "simple_qa": 0.5
+        },
+        "cost_per_1k_input": 0.001,
+        "cost_per_1k_output": 0.005,
+        "last_updated": "2026-04-24",
+        "max_tokens": 100000,
+        "name": "edge-just-below",
+        "provider": "openai"
+      }
+    ],
+    "task_type": "coding",
+    "threshold": 0.7
+  }
+]

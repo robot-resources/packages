@@ -1,0 +1,11 @@
+{
+  "id": "openclaw-plugin",
+  "name": "Robot Resources",
+  "description": "Cost-optimized model routing + token-compressed web fetching",
+  "providers": ["robot-resources"],
+  "configSchema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  }
+}

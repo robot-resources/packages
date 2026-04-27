@@ -1,0 +1,1056 @@
+[
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "function",
+        "python"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 8
+      },
+      "task_type": "coding"
+    },
+    "prompt": "write a python function to sort a list"
+  },
+  {
+    "expected": {
+      "confidence": 0.95,
+      "matched_keywords": [
+        "javascript code",
+        "debug this",
+        "code",
+        "debug",
+        "javascript"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 4
+      },
+      "task_type": "coding"
+    },
+    "prompt": "debug this javascript code"
+  },
+  {
+    "expected": {
+      "confidence": 0.9,
+      "matched_keywords": [
+        "implement a",
+        "implement",
+        "algorithm"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 5
+      },
+      "task_type": "coding"
+    },
+    "prompt": "implement a binary search algorithm"
+  },
+  {
+    "expected": {
+      "confidence": 0.9,
+      "matched_keywords": [
+        "fix the bug",
+        "bug",
+        "react"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 7
+      },
+      "task_type": "coding"
+    },
+    "prompt": "fix the bug in my react component"
+  },
+  {
+    "expected": {
+      "confidence": 0.9,
+      "matched_keywords": [
+        "write typescript",
+        "typescript",
+        "websocket"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 6
+      },
+      "task_type": "coding"
+    },
+    "prompt": "write typescript for a websocket server"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "rest api",
+        "api endpoint"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 5
+      },
+      "task_type": "coding"
+    },
+    "prompt": "create a rest api endpoint"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "class",
+        "refactor"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 7
+      },
+      "task_type": "coding"
+    },
+    "prompt": "refactor this class to use async await"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "regex"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 7
+      },
+      "task_type": "coding"
+    },
+    "prompt": "write a regex to match email addresses"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "docker"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 5
+      },
+      "task_type": "coding"
+    },
+    "prompt": "explain how docker volumes work"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "what's"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 7
+      },
+      "task_type": "simple_qa"
+    },
+    "prompt": "what's the syntax for a python decorator"
+  },
+  {
+    "expected": {
+      "confidence": 0.9,
+      "matched_keywords": [
+        "explain why",
+        "why",
+        "explain"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 6
+      },
+      "task_type": "reasoning"
+    },
+    "prompt": "explain why the sky is blue"
+  },
+  {
+    "expected": {
+      "confidence": 0.95,
+      "matched_keywords": [
+        "reason through",
+        "reason",
+        "logic",
+        "puzzle"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 5
+      },
+      "task_type": "reasoning"
+    },
+    "prompt": "reason through this logic puzzle"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "tell me why",
+        "why"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 5
+      },
+      "task_type": "reasoning"
+    },
+    "prompt": "tell me why entropy increases"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "deduce",
+        "conclusion"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 6
+      },
+      "task_type": "reasoning"
+    },
+    "prompt": "deduce the conclusion from these premises"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "step by step",
+        "paradox"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 6
+      },
+      "task_type": "reasoning"
+    },
+    "prompt": "solve this paradox step by step"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "think through"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 7
+      },
+      "task_type": "reasoning"
+    },
+    "prompt": "think through the implications of free will"
+  },
+  {
+    "expected": {
+      "confidence": 0.9,
+      "matched_keywords": [
+        "compare and contrast",
+        "compare",
+        "contrast"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 6
+      },
+      "task_type": "analysis"
+    },
+    "prompt": "compare and contrast REST and GraphQL"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "strengths and weaknesses",
+        "analyze"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 7
+      },
+      "task_type": "analysis"
+    },
+    "prompt": "analyze the strengths and weaknesses of microservices"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "evaluate",
+        "tradeoffs"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 5
+      },
+      "task_type": "analysis"
+    },
+    "prompt": "evaluate the tradeoffs of monorepos"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "review"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 5
+      },
+      "task_type": "analysis"
+    },
+    "prompt": "review this architecture for performance"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "pros and cons",
+        "examine"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 8
+      },
+      "task_type": "analysis"
+    },
+    "prompt": "examine the pros and cons of remote work"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "investigate"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 7
+      },
+      "task_type": "analysis"
+    },
+    "prompt": "investigate the root cause of this outage"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "what is",
+        "capital of"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 6
+      },
+      "task_type": "simple_qa"
+    },
+    "prompt": "what is the capital of France"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "who invented"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 4
+      },
+      "task_type": "simple_qa"
+    },
+    "prompt": "who invented the telephone"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "when was"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 6
+      },
+      "task_type": "simple_qa"
+    },
+    "prompt": "when was the eiffel tower built"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "where is"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 5
+      },
+      "task_type": "simple_qa"
+    },
+    "prompt": "where is mount everest located"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "how many"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 8
+      },
+      "task_type": "simple_qa"
+    },
+    "prompt": "how many planets are in the solar system"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "define"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 2
+      },
+      "task_type": "simple_qa"
+    },
+    "prompt": "define photosynthesis"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "what does",
+        "stand for"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 5
+      },
+      "task_type": "simple_qa"
+    },
+    "prompt": "what does HTTP stand for"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "translate"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 4
+      },
+      "task_type": "simple_qa"
+    },
+    "prompt": "translate hello to spanish"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "write",
+        "haiku"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 5
+      },
+      "task_type": "creative"
+    },
+    "prompt": "write a haiku about autumn"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "compose",
+        "sonnet"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 6
+      },
+      "task_type": "creative"
+    },
+    "prompt": "compose a sonnet about the ocean"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "brainstorm"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 6
+      },
+      "task_type": "creative"
+    },
+    "prompt": "brainstorm names for a coffee shop"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "draft",
+        "marketing"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 8
+      },
+      "task_type": "creative"
+    },
+    "prompt": "draft a marketing email for a saas product"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "come up with",
+        "tagline"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 9
+      },
+      "task_type": "creative"
+    },
+    "prompt": "come up with a tagline for a fitness app"
+  },
+  {
+    "expected": {
+      "confidence": 0.9,
+      "matched_keywords": [
+        "short story",
+        "write",
+        "story"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 7
+      },
+      "task_type": "creative"
+    },
+    "prompt": "write a short story about a robot"
+  },
+  {
+    "expected": {
+      "confidence": 0.9,
+      "matched_keywords": [
+        "marketing copy",
+        "generate",
+        "marketing"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 7
+      },
+      "task_type": "creative"
+    },
+    "prompt": "generate marketing copy for a new sneaker"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "imagine"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 5
+      },
+      "task_type": "creative"
+    },
+    "prompt": "imagine a world without electricity"
+  },
+  {
+    "expected": {
+      "confidence": 0.5,
+      "matched_keywords": [],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 1
+      },
+      "task_type": "general"
+    },
+    "prompt": "hello"
+  },
+  {
+    "expected": {
+      "confidence": 0.5,
+      "matched_keywords": [],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 1
+      },
+      "task_type": "general"
+    },
+    "prompt": "thanks!"
+  },
+  {
+    "expected": {
+      "confidence": 0.5,
+      "matched_keywords": [],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 2
+      },
+      "task_type": "general"
+    },
+    "prompt": "ok sure"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "article"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 5
+      },
+      "task_type": "creative"
+    },
+    "prompt": "summarize this article for me"
+  },
+  {
+    "expected": {
+      "confidence": 0.5,
+      "matched_keywords": [],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 8
+      },
+      "task_type": "general"
+    },
+    "prompt": "help me decide what to eat for dinner"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "write a function",
+        "function"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 3
+      },
+      "task_type": "coding"
+    },
+    "prompt": "write a function"
+  },
+  {
+    "expected": {
+      "confidence": 0.9,
+      "matched_keywords": [
+        "write a function",
+        "function",
+        "python"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 5
+      },
+      "task_type": "coding"
+    },
+    "prompt": "write a function in python"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "explain"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 1
+      },
+      "task_type": "reasoning"
+    },
+    "prompt": "explain"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "why"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 5
+      },
+      "task_type": "reasoning"
+    },
+    "prompt": "why is the sky blue"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "capital of"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 8
+      },
+      "task_type": "simple_qa"
+    },
+    "prompt": "why is the capital of France called Paris"
+  },
+  {
+    "expected": {
+      "confidence": 0.8,
+      "matched_keywords": [
+        "code",
+        "compile"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 5
+      },
+      "task_type": "coding"
+    },
+    "prompt": "why won't my code compile"
+  },
+  {
+    "expected": {
+      "confidence": 0.6,
+      "matched_keywords": [],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 2
+      },
+      "task_type": "coding"
+    },
+    "prompt": "explain async/await"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "explain"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 3
+      },
+      "task_type": "reasoning"
+    },
+    "prompt": "explain quantum entanglement"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "compare"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 4
+      },
+      "task_type": "analysis"
+    },
+    "prompt": "compare React vs Vue"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "compare"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 4
+      },
+      "task_type": "analysis"
+    },
+    "prompt": "compare these two photos"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "function"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 8
+      },
+      "task_type": "coding"
+    },
+    "prompt": "write a story about a function called sort"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "python"
+      ],
+      "structure": {
+        "has_code_block": true,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 3,
+        "word_count": 5
+      },
+      "task_type": "coding"
+    },
+    "prompt": "```python\nx = 1\n```"
+  },
+  {
+    "expected": {
+      "confidence": 0.7,
+      "matched_keywords": [
+        "what is"
+      ],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 1,
+        "word_count": 3
+      },
+      "task_type": "simple_qa"
+    },
+    "prompt": "what is HTTP"
+  },
+  {
+    "expected": {
+      "confidence": 0.5,
+      "matched_keywords": [],
+      "structure": {
+        "has_code_block": false,
+        "has_inline_code": false,
+        "has_question_mark": false,
+        "is_short_question": false,
+        "line_count": 6,
+        "word_count": 20
+      },
+      "task_type": "general"
+    },
+    "prompt": "what is going on here\nthis is a long\nmulti line\nprompt asking\nwhat is the answer\nto this question"
+  }
+]

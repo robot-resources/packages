@@ -1,0 +1,286 @@
+[
+  {
+    "expected": {
+      "baseline_cost": 0.005,
+      "baseline_model": "claude-opus-4-6",
+      "capability_score": 0.68,
+      "capability_threshold": 0.6,
+      "classification_source": "keyword",
+      "cost_per_1k_input": 0.00075,
+      "cost_per_1k_output": 0.0045,
+      "detection_confidence": 0.8,
+      "keyword_confidence": 0.8,
+      "keyword_task_type": "coding",
+      "llm_complexity": 2,
+      "llm_model": "gemini-1.5-flash-8b",
+      "llm_task_type": "coding",
+      "matched_keywords": [
+        "write a function",
+        "function"
+      ],
+      "max_tokens": 272000,
+      "provider": "openai",
+      "ranked_candidates": [
+        {
+          "cost_per_1k_input": 0.001,
+          "name": "claude-haiku-4-5-20251001",
+          "provider": "anthropic"
+        },
+        {
+          "cost_per_1k_input": 0.0011,
+          "name": "o4-mini",
+          "provider": "openai"
+        },
+        {
+          "cost_per_1k_input": 0.002,
+          "name": "o3",
+          "provider": "openai"
+        },
+        {
+          "cost_per_1k_input": 0.0025,
+          "name": "gpt-5.4",
+          "provider": "openai"
+        },
+        {
+          "cost_per_1k_input": 0.003,
+          "name": "claude-sonnet-4-6",
+          "provider": "anthropic"
+        },
+        {
+          "cost_per_1k_input": 0.005,
+          "name": "claude-opus-4-6",
+          "provider": "anthropic"
+        }
+      ],
+      "reasoning": "Selected gpt-5.4-mini (openai) as cheapest model capable of 'coding' tasks (capability: 0.68, threshold: 0.6). Saves 85.0% vs claude-opus-4-6.",
+      "savings_percent": 85.0,
+      "selected_model": "gpt-5.4-mini",
+      "task_type": "coding"
+    },
+    "mocked_llm": {
+      "classifier_model": "gemini-1.5-flash-8b",
+      "complexity": 2,
+      "task_type": "coding"
+    },
+    "prompt": "write a function"
+  },
+  {
+    "expected": {
+      "baseline_cost": 0.005,
+      "baseline_model": "claude-opus-4-6",
+      "capability_score": 0.86,
+      "capability_threshold": 0.85,
+      "classification_source": "keyword",
+      "cost_per_1k_input": 0.0025,
+      "cost_per_1k_output": 0.015,
+      "detection_confidence": 0.8,
+      "keyword_confidence": 0.8,
+      "keyword_task_type": "coding",
+      "llm_complexity": 5,
+      "llm_model": "gemini-1.5-flash-8b",
+      "llm_task_type": "coding",
+      "matched_keywords": [
+        "write a function",
+        "function"
+      ],
+      "max_tokens": 1050000,
+      "provider": "openai",
+      "ranked_candidates": [
+        {
+          "cost_per_1k_input": 0.003,
+          "name": "claude-sonnet-4-6",
+          "provider": "anthropic"
+        },
+        {
+          "cost_per_1k_input": 0.005,
+          "name": "claude-opus-4-6",
+          "provider": "anthropic"
+        }
+      ],
+      "reasoning": "Selected gpt-5.4 (openai) as cheapest model capable of 'coding' tasks (capability: 0.86, threshold: 0.85). Saves 50.0% vs claude-opus-4-6.",
+      "savings_percent": 50.0,
+      "selected_model": "gpt-5.4",
+      "task_type": "coding"
+    },
+    "mocked_llm": {
+      "classifier_model": "gemini-1.5-flash-8b",
+      "complexity": 5,
+      "task_type": "coding"
+    },
+    "prompt": "write a function"
+  },
+  {
+    "expected": {
+      "baseline_cost": 0.005,
+      "baseline_model": "claude-opus-4-6",
+      "capability_score": 0.95,
+      "capability_threshold": 0.85,
+      "classification_source": "keyword",
+      "cost_per_1k_input": 0.002,
+      "cost_per_1k_output": 0.008,
+      "detection_confidence": 0.7,
+      "keyword_confidence": 0.7,
+      "keyword_task_type": "reasoning",
+      "llm_complexity": 4,
+      "llm_model": "gemini-1.5-flash-8b",
+      "llm_task_type": "reasoning",
+      "matched_keywords": [
+        "explain"
+      ],
+      "max_tokens": 200000,
+      "provider": "openai",
+      "ranked_candidates": [
+        {
+          "cost_per_1k_input": 0.0025,
+          "name": "gpt-5.4",
+          "provider": "openai"
+        },
+        {
+          "cost_per_1k_input": 0.003,
+          "name": "claude-sonnet-4-6",
+          "provider": "anthropic"
+        },
+        {
+          "cost_per_1k_input": 0.005,
+          "name": "claude-opus-4-6",
+          "provider": "anthropic"
+        }
+      ],
+      "reasoning": "Selected o3 (openai) as cheapest model capable of 'reasoning' tasks (capability: 0.95, threshold: 0.85). Saves 60.0% vs claude-opus-4-6.",
+      "savings_percent": 60.0,
+      "selected_model": "o3",
+      "task_type": "reasoning"
+    },
+    "mocked_llm": {
+      "classifier_model": "gemini-1.5-flash-8b",
+      "complexity": 4,
+      "task_type": "reasoning"
+    },
+    "prompt": "explain quantum entanglement"
+  },
+  {
+    "expected": {
+      "baseline_cost": 0.005,
+      "baseline_model": "claude-opus-4-6",
+      "capability_score": 0.75,
+      "capability_threshold": 0.7,
+      "classification_source": "llm",
+      "cost_per_1k_input": 0.00125,
+      "cost_per_1k_output": 0.01,
+      "detection_confidence": 0.8,
+      "keyword_confidence": 0.8,
+      "keyword_task_type": "coding",
+      "llm_complexity": 3,
+      "llm_model": "gemini-1.5-flash-8b",
+      "llm_task_type": "creative",
+      "matched_keywords": [
+        "write a function",
+        "function"
+      ],
+      "max_tokens": 1048576,
+      "provider": "google",
+      "ranked_candidates": [
+        {
+          "cost_per_1k_input": 0.0025,
+          "name": "gpt-5.4",
+          "provider": "openai"
+        },
+        {
+          "cost_per_1k_input": 0.003,
+          "name": "claude-sonnet-4-6",
+          "provider": "anthropic"
+        },
+        {
+          "cost_per_1k_input": 0.005,
+          "name": "claude-opus-4-6",
+          "provider": "anthropic"
+        }
+      ],
+      "reasoning": "Selected gemini-2.5-pro (google) as cheapest model capable of 'creative' tasks (capability: 0.75, threshold: 0.7). Saves 75.0% vs claude-opus-4-6.",
+      "savings_percent": 75.0,
+      "selected_model": "gemini-2.5-pro",
+      "task_type": "creative"
+    },
+    "mocked_llm": {
+      "classifier_model": "gemini-1.5-flash-8b",
+      "complexity": 3,
+      "task_type": "creative"
+    },
+    "prompt": "write a function"
+  },
+  {
+    "expected": {
+      "baseline_cost": 0.005,
+      "baseline_model": "claude-opus-4-6",
+      "capability_score": 0.78,
+      "capability_threshold": 0.7,
+      "classification_source": "keyword",
+      "cost_per_1k_input": 0.0001,
+      "cost_per_1k_output": 0.0004,
+      "detection_confidence": 0.7,
+      "keyword_confidence": 0.7,
+      "keyword_task_type": "simple_qa",
+      "llm_complexity": null,
+      "llm_model": null,
+      "llm_task_type": null,
+      "matched_keywords": [
+        "what is"
+      ],
+      "max_tokens": 1048576,
+      "provider": "google",
+      "ranked_candidates": [
+        {
+          "cost_per_1k_input": 0.0002,
+          "name": "gpt-5.4-nano",
+          "provider": "openai"
+        },
+        {
+          "cost_per_1k_input": 0.0003,
+          "name": "gemini-2.5-flash",
+          "provider": "google"
+        },
+        {
+          "cost_per_1k_input": 0.00075,
+          "name": "gpt-5.4-mini",
+          "provider": "openai"
+        },
+        {
+          "cost_per_1k_input": 0.001,
+          "name": "claude-haiku-4-5-20251001",
+          "provider": "anthropic"
+        },
+        {
+          "cost_per_1k_input": 0.00125,
+          "name": "gemini-2.5-pro",
+          "provider": "google"
+        },
+        {
+          "cost_per_1k_input": 0.002,
+          "name": "o3",
+          "provider": "openai"
+        },
+        {
+          "cost_per_1k_input": 0.0025,
+          "name": "gpt-5.4",
+          "provider": "openai"
+        },
+        {
+          "cost_per_1k_input": 0.003,
+          "name": "claude-sonnet-4-6",
+          "provider": "anthropic"
+        },
+        {
+          "cost_per_1k_input": 0.005,
+          "name": "claude-opus-4-6",
+          "provider": "anthropic"
+        }
+      ],
+      "reasoning": "Selected gemini-2.5-flash-lite (google) as cheapest model capable of 'simple_qa' tasks (capability: 0.78, threshold: 0.7). Saves 98.0% vs claude-opus-4-6.",
+      "savings_percent": 98.0,
+      "selected_model": "gemini-2.5-flash-lite",
+      "task_type": "simple_qa"
+    },
+    "mocked_llm": null,
+    "prompt": "what is your favorite color"
+  }
+]

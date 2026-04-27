@@ -1,134 +1,142 @@
-# @robot-resources/router-mcp
+# @robot-resources/router
 
-> MCP server for managing Robot Resources Router — stats, config, and model comparison.
+> Intelligent LLM cost optimization via local proxy.
 
-## What is Robot Resources?
-
-**Human Resources, but for your AI agents.**
-
-Robot Resources cuts your LLM API costs by 60-90%. It runs a local proxy that classifies each prompt by task type (coding, reasoning, analysis, simple Q&A, creative, general) and routes it to the cheapest model that can handle it — across 11 models from OpenAI, Anthropic, and Google.
-
-Your API keys never leave your machine. Free, unlimited, no tiers.
-
-### Install the full suite
-
-```bash
-npx robot-resources
-```
-
-One command sets up the Router proxy, configures your agents, and gets you saving immediately.
-
-Learn more at [robotresources.ai](https://robotresources.ai)
-
----
-
-## About this MCP server
-
-This package gives AI agents management tools for the Router proxy via the [Model Context Protocol](https://modelcontextprotocol.io). Use it to check cost savings, compare models, and adjust routing config — all from within Claude Desktop, Claude Code, or any MCP-compatible agent.
+Automatically route each LLM request to the cheapest model that can handle it. **60-90% cost savings** with no quality loss.
 
 ## Quick Start
 
 ```bash
-npx @robot-resources/router-mcp
+# Run directly (no install needed) — runs the setup wizard on first invocation
+npx @robot-resources/router
+
+# Or install globally
+npm install -g @robot-resources/router
+rr-router
 ```
 
-Requires the Router proxy running at `localhost:3838` (default). Override with `ROUTER_URL` env var.
+On first run, the wizard:
 
-## Configuration
+1. Installs the Python router engine (venv + pip) in `~/.robot-resources/.venv/`
+2. Registers the router as a background service (launchd on macOS, systemd on Linux)
+3. Auto-configures detected AI tools (Claude Code, Cursor) as MCP clients
+4. If no tools are detected, prints copy-pasteable SDK `base_url` instructions
 
-### Claude Desktop
-
-Add to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "router": {
-      "command": "npx",
-      "args": ["-y", "@robot-resources/router-mcp"]
-    }
-  }
-}
-```
-
-### Claude Code
-
-Add to your `.mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "router": {
-      "command": "npx",
-      "args": ["-y", "@robot-resources/router-mcp"]
-    }
-  }
-}
-```
-
-### Custom Router URL
-
-If the proxy runs on a non-default port:
-
-```json
-{
-  "mcpServers": {
-    "router": {
-      "command": "npx",
-      "args": ["-y", "@robot-resources/router-mcp"],
-      "env": {
-        "ROUTER_URL": "http://localhost:4000"
-      }
-    }
-  }
-}
-```
-
-## Tools
-
-### `router_get_stats`
-
-Cost savings statistics for the Router proxy.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `period` | `"daily" \| "weekly" \| "monthly"` | `"weekly"` | Time period |
-| `task_type` | `string` | — | Filter by task type |
-| `provider` | `string` | — | Filter by provider |
-
-### `router_compare_models`
-
-Compare models by capability and cost for a given task type.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `task_type` | `string` | **required** | Task type to compare |
-| `threshold` | `number` | `0.7` | Minimum capability score |
-| `provider` | `string` | — | Filter by provider |
-
-### `router_get_config`
-
-Read current routing configuration (provider scope, thresholds, overrides).
-
-No parameters required.
-
-### `router_set_config`
-
-Update routing configuration at runtime. Changes are in-memory only (reset on restart).
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `provider_scope` | `string` | Limit to specific provider(s) |
-| `capability_threshold` | `number` | Minimum capability score |
-| `baseline_model` | `string` | Model for cost comparisons |
-| `log_level` | `string` | Logging level |
-
-Pass `null` for any field to reset it to the env-var default.
+After that, calls like `rr-router start`, `rr-router status`, or `rr-router report` skip the wizard. Use `--setup` to re-run it.
 
 ## Requirements
 
 - **Node.js** >= 18.0.0
-- **Router proxy** running (see [@robot-resources/router](https://www.npmjs.com/package/@robot-resources/router))
+- **Python** >= 3.10 (auto-detected; used for the routing engine)
+
+## Enterprise / Docker
+
+Inside Docker, the wizard skips service registration and prints three ways to run the router: Dockerfile `CMD`, Compose sidecar, or background process. Set `RR_API_KEY` in advance to bypass the auto-signup step entirely.
+
+## Enterprise setup (admin-provisioned keys)
+
+For fleets where an admin distributes API keys to many agents, pre-set `RR_API_KEY` and the wizard skips signup:
+
+```bash
+# Admin: create N keys in the dashboard via POST /v1/keys, then on each agent:
+RR_API_KEY=rr_live_... npx @robot-resources/router
+```
+
+This bypasses the per-IP signup rate limit and avoids one claim URL per agent. All telemetry lands under the admin's account.
+
+## Pointing your SDK at the Router
+
+Two SDKs are supported via the `base_url` override. Note the difference:
+
+```bash
+# OpenAI SDK / compatible clients — include /v1
+export OPENAI_BASE_URL=http://localhost:3838/v1
+#   OpenAI(base_url="http://localhost:3838/v1")
+
+# Anthropic SDK — NO /v1 (the SDK appends /v1/messages itself)
+export ANTHROPIC_BASE_URL=http://localhost:3838
+#   Anthropic(base_url="http://localhost:3838")
+```
+
+For Gemini, route through the OpenAI-compatible client with a Gemini model name:
+
+```python
+from openai import OpenAI
+client = OpenAI(base_url="http://localhost:3838/v1", api_key="not-needed")
+client.chat.completions.create(model="gemini-2.5-flash", ...)
+```
+
+The router has no native Google `v1beta` endpoint — `GOOGLE_API_BASE` is not a real env var.
+
+## How It Works
+
+```
+Your Agent (Claude Code, Cursor, etc.)
+    |
+    | POST /v1/chat/completions  (OpenAI-compatible)
+    | model: "auto"
+    v
+┌─────────────────────────────┐
+│  Robot Resources Router     │
+│  localhost:3838              │
+│                             │
+│  1. Detect task type        │
+│  2. Find cheapest model     │
+│  3. Forward to provider     │
+│  4. Track cost savings      │
+└─────────────────────────────┘
+    |
+    v
+  Anthropic / OpenAI / Google
+```
+
+Each message is classified (coding, reasoning, simple_qa, etc.) and routed to the cheapest model with sufficient capability for that task.
+
+## Example Savings
+
+```
+Turn 1: "hello"                    → gemini-2.0-flash-lite        $0.0000
+Turn 2: "what's 2+2?"              → gemini-2.0-flash-lite        $0.0000
+Turn 3: "refactor this React code" → gpt-4o-mini                  $0.0002
+Turn 4: "thanks, looks good"       → gemini-2.0-flash-lite        $0.0000
+─────────────────────────────────────────────────────────────────────────
+Total with RR:       $0.0002
+Without RR (gpt-4o): $0.0075
+Savings:             97%
+```
+
+## Configuration
+
+Set provider API keys as environment variables:
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+export OPENAI_API_KEY="sk-..."
+export GOOGLE_API_KEY="..."
+```
+
+## CLI Commands
+
+```bash
+rr-router start              # Start proxy on localhost:3838
+rr-router start --port 4000  # Custom port
+rr-router status             # Show status
+rr-router report weekly      # Cost savings report (7 days)
+rr-router report monthly     # Cost savings report (30 days)
+```
+
+## Agent Integration
+
+Point any OpenAI-compatible agent to the proxy:
+
+```json
+{
+  "baseUrl": "http://localhost:3838",
+  "model": "auto"
+}
+```
+
+The proxy handles routing transparently. Your agent doesn't need to know about model selection.
 
 ## License
 
