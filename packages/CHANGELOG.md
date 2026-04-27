@@ -1,5 +1,11 @@
 # robot-resources
 
+## 1.10.6
+
+### Patch Changes
+
+- ad61708: Inlined former `@robot-resources/cli-core` modules (auth.mjs, config.mjs, login.mjs) into `packages/cli/lib/`. Auth/config/login flows unchanged. The cli-core npm package is deprecated post-merge with a redirect to `npx robot-resources`. Last workspace consolidation in the Router refactor — workspace ships exactly three npm packages now: `@robot-resources/router`, `@robot-resources/scraper`, `robot-resources`.
+
 ## 1.10.5
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "robot-resources",
-  "version": "1.10.5",
+  "version": "1.10.6",
   "description": "Robot Resources — AI agent tools. One command to install everything.",
   "type": "module",
   "bin": {
@@ -17,6 +17,7 @@
     "README.md"
   ],
   "dependencies": {
+    "@inquirer/prompts": "^7.0.0",
     "@robot-resources/router": "*",
     "@robot-resources/scraper": "*"
   },

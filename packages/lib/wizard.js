@@ -7,6 +7,7 @@ import { getOrCreateMachineId } from './machine-id.js';
 import { configureToolRouting, registerScraperMcp, restartOpenClawGateway } from './tool-config.js';
 import { checkHealth } from './health-report.js';
 import { header, step, success, warn, error, info, blank, summary } from './ui.js';
+import { runNonOcWizard } from './non-oc-wizard.js';
 
 // Stamped onto every CLI telemetry payload so we can tell which `robot-resources`
 // version a user actually ran. Without this, npx-cached old installers look
@@ -41,23 +42,17 @@ const CLI_VERSION = (() => {
  *
  * No Python, no venv, no systemd, no port probe.
  */
-export async function runWizard({ nonInteractive = false } = {}) {
+export async function runWizard({ nonInteractive = false, target = null } = {}) {
   header();
 
-  // Non-OC interactive early-exit. Without this, a human running
-  // `npx robot-resources` on a machine without OpenClaw would still
-  // provision an api_key, fire wizard_started + install_complete
-  // telemetry, and write ~/.robot-resources/config.json — six no-op
-  // side effects against a machine that can't actually use the product.
-  // Non-interactive callers (CI, agents, scripts that pre-set RR_API_KEY)
-  // bypass: they explicitly chose to run the wizard.
-  if (!isOpenClawInstalled() && !nonInteractive) {
-    info('Robot Resources requires OpenClaw, which we did not detect on this machine.');
-    info('Install OpenClaw first (https://openclaw.dev), then re-run:');
-    info('  npx robot-resources');
-    blank();
-    info('If you are integrating Robot Resources into a non-OC agent, see PR 7 docs');
-    info('(coming soon — https://robotresources.ai/docs/integrations).');
+  // Non-OC branch. Hands off to the multi-agent compatibility wizard which
+  // routes the user to the right install path (npm install / pip install /
+  // MCP config / docs / install-OC). Non-interactive callers bypass into the
+  // OC install path only when --for=<target> isn't supplied; otherwise they
+  // get the print-and-exit hint with the supported --for= options.
+  // Pre-PR-8 this was a 17-line print-and-exit; PR 8 made it interactive.
+  if (!isOpenClawInstalled()) {
+    await runNonOcWizard({ nonInteractive, target });
     return;
   }
 

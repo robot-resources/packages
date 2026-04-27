@@ -53,11 +53,16 @@ vi.mock('../lib/ui.js', () => ({
   summary: vi.fn(),
 }));
 
+vi.mock('../lib/non-oc-wizard.js', () => ({
+  runNonOcWizard: vi.fn(() => Promise.resolve()),
+}));
+
 const { writeFileSync } = await import('node:fs');
 const { readConfig, writeConfig } = await import('../lib/config.mjs');
 const { configureToolRouting, restartOpenClawGateway } = await import('../lib/tool-config.js');
 const { isOpenClawInstalled } = await import('../lib/detect.js');
 const { warn, info } = await import('../lib/ui.js');
+const { runNonOcWizard } = await import('../lib/non-oc-wizard.js');
 const { runWizard } = await import('../lib/wizard.js');
 
 // Capture install_complete payloads sent via fetch.
@@ -167,7 +172,7 @@ describe('wizard (Option 4 — in-process server, no daemon-install path)', () =
   });
 
   describe('OpenClaw absent', () => {
-    it('early-exits interactive runs without provisioning a key or firing telemetry', async () => {
+    it('hands off interactive non-OC runs to runNonOcWizard with no provisioning', async () => {
       isOpenClawInstalled.mockReturnValue(false);
       readConfig.mockReturnValue({});
       delete process.env.RR_API_KEY;
@@ -175,32 +180,33 @@ describe('wizard (Option 4 — in-process server, no daemon-install path)', () =
 
       await runWizard({ nonInteractive: false });
 
-      // No signup, no telemetry, no status file — zero side effects.
+      // The wizard body must NOT run: no signup, no telemetry, no status file.
       expect(writeConfig).not.toHaveBeenCalled();
       expect(globalThis.fetch).not.toHaveBeenCalled();
       const statusCall = writeFileSync.mock.calls.find(
         (c) => typeof c[0] === 'string' && c[0].includes('wizard-status.json'),
       );
       expect(statusCall).toBeFalsy();
-      // Redirect message rendered.
-      expect(info).toHaveBeenCalledWith(expect.stringContaining('OpenClaw'));
+      // Hand-off to the non-OC wizard happens with the right options.
+      expect(runNonOcWizard).toHaveBeenCalledWith({ nonInteractive: false, target: null });
     });
 
-    it('non-interactive callers bypass the early-exit and run the wizard body', async () => {
-      // CI / agents / scripts with RR_API_KEY pre-set may legitimately
-      // run the wizard on a machine that doesn't yet have OC.
+    it('hands off non-interactive non-OC runs to runNonOcWizard (PR 8 behavior change)', async () => {
+      // PR 8 unified the non-OC path: when OC is absent, ALL callers go to
+      // runNonOcWizard regardless of nonInteractive. The pre-PR-8 escape
+      // hatch (non-interactive + RR_API_KEY pre-set bypassed the early-exit
+      // and ran the OC install path against a machine without OC) is gone.
+      // That path no-op'd anyway since plugin install requires OC; the
+      // non-oc-wizard print-and-exit is more useful for those users.
       isOpenClawInstalled.mockReturnValue(false);
       readConfig.mockReturnValue({ api_key: 'rr_live_preset' });
       configureToolRouting.mockReturnValue([]);
 
-      await runWizard({ nonInteractive: true });
+      await runWizard({ nonInteractive: true, target: 'langchain' });
 
-      // wizard_started + install_complete telemetry both fire (api_key
-      // already on disk, so no signup call).
-      const telemetryCalls = globalThis.fetch.mock.calls.filter(
-        (c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'),
-      );
-      expect(telemetryCalls.length).toBeGreaterThan(0);
+      // No wizard body — runNonOcWizard handles it.
+      expect(configureToolRouting).not.toHaveBeenCalled();
+      expect(runNonOcWizard).toHaveBeenCalledWith({ nonInteractive: true, target: 'langchain' });
     });
   });
 
