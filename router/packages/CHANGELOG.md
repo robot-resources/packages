@@ -1,5 +1,29 @@
 # @robot-resources/router
 
+## 4.1.1
+
+### Patch Changes
+
+- 37e0d85: PR 6 of the in-process refactor: split the scraper hook out of the router plugin into its own OC plugin package.
+
+  The router plugin previously carried both the in-process model-routing logic AND a small `before_tool_call` hook that redirects OpenClaw's `web_fetch` tool calls to `scraper_compress_url` (provided by `@robot-resources/scraper-mcp`). PR 6 splits these — model routing stays in `@robot-resources/router`, and the scraper redirect hook moves to a brand-new `@robot-resources/scraper-oc-plugin` package. One tool per OC plugin.
+
+  What changes for users:
+
+  - **Fresh installs** of `npx robot-resources` now create `~/.openclaw/extensions/robot-resources-scraper-oc-plugin/` alongside `~/.openclaw/extensions/robot-resources-router/`, and register both in `openclaw.json` (`plugins.entries` + `plugins.allow`).
+  - **Returning users**: re-running `npx robot-resources` adds the second plugin entry to your config. Old `openclaw-plugin/` orphans (from pre-PR-5) stay harmless.
+  - **Behavior is unchanged**: `web_fetch` still gets redirected to `scraper_compress_url`, just from a different OC plugin process now.
+
+  What this PR explicitly does NOT change:
+
+  - Scraper MCP server (`@robot-resources/scraper-mcp`) — untouched. Still serves non-OC consumers (Cursor, Aider, Claude Code).
+  - Scraper core lib (`@robot-resources/scraper`) — untouched.
+  - Router routing decisions — the router plugin's in-process server still owns model selection.
+
+  Originally scoped as deferred indefinitely at PR 5 planning time (the hook is only ~20 LOC with zero scraper-lib dependencies, and there was no current non-OC consumer to justify a new package). Manuel's call 2026-04-27 to do it now anyway, ahead of PR 8's multi-agent compatibility work.
+
+  Out-of-band post-merge: verify `@robot-resources/scraper-oc-plugin@0.1.0` actually publishes via the OIDC pipeline. First-time publish of a new package may need a manual one-shot.
+
 ## 4.1.0
 
 ### Minor Changes

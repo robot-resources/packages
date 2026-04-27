@@ -1,6 +1,6 @@
 {
   "name": "@robot-resources/router",
-  "version": "4.1.0",
+  "version": "4.1.1",
   "description": "Robot Resources Router — in-process LLM routing for OpenClaw. Smart-selects the cheapest Anthropic model capable of each prompt. No daemon, no Python, runs inside the OC plugin process.",
   "type": "module",
   "main": "index.js",
