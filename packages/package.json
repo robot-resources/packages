@@ -1,41 +1,53 @@
 {
-  "name": "@robot-resources/cli-core",
-  "version": "0.1.8",
-  "description": "Shared CLI utilities — auth, config, login (internal)",
+  "name": "robot-resources",
+  "version": "1.10.5",
+  "description": "Robot Resources — AI agent tools. One command to install everything.",
   "type": "module",
-  "main": "./index.mjs",
-  "exports": {
-    ".": "./index.mjs",
-    "./auth.mjs": "./auth.mjs",
-    "./config.mjs": "./config.mjs",
-    "./login.mjs": "./login.mjs",
-    "./python-bridge.mjs": "./python-bridge.mjs"
+  "bin": {
+    "robot-resources-setup": "./bin/setup.js"
   },
+  "main": "./bin/setup.js",
   "scripts": {
     "test": "vitest",
     "test:run": "vitest run"
   },
   "files": [
-    "*.mjs"
+    "bin/",
+    "lib/",
+    "README.md"
   ],
+  "dependencies": {
+    "@robot-resources/router": "*",
+    "@robot-resources/scraper": "*"
+  },
   "devDependencies": {
     "vitest": "^1.2.0"
   },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "llm",
+    "router",
+    "scraper",
+    "mcp",
+    "cost-optimization",
+    "robot-resources"
+  ],
+  "license": "MIT",
+  "author": "Robot Resources Team",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/robot-resources/packages.git",
-    "directory": "packages/cli-core"
+    "directory": "packages/cli"
   },
   "homepage": "https://robotresources.ai",
   "bugs": {
     "url": "https://github.com/robot-resources/robot-resources/issues"
   },
-  "license": "MIT",
-  "author": "Robot Resources Team",
   "publishConfig": {
     "access": "public"
-  },
-  "engines": {
-    "node": ">=18.0.0"
   }
 }

@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock dependencies before importing
-vi.mock('../auth.mjs', () => ({
+vi.mock('../lib/auth.mjs', () => ({
   authenticate: vi.fn(),
 }));
 
-vi.mock('../config.mjs', () => ({
+vi.mock('../lib/config.mjs', () => ({
   writeConfig: vi.fn(),
   getConfigPath: vi.fn(() => '/mock-home/.robot-resources/config.json'),
 }));
@@ -14,9 +14,9 @@ vi.mock('../config.mjs', () => ({
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch;
 
-const { authenticate } = await import('../auth.mjs');
-const { writeConfig, getConfigPath } = await import('../config.mjs');
-const { createApiKey } = await import('../login.mjs');
+const { authenticate } = await import('../lib/auth.mjs');
+const { writeConfig, getConfigPath } = await import('../lib/config.mjs');
+const { createApiKey } = await import('../lib/login.mjs');
 
 describe('login', () => {
   beforeEach(() => {

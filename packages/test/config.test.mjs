@@ -14,7 +14,7 @@ vi.mock('node:os', () => ({
 
 const { readFileSync, writeFileSync, mkdirSync } = await import('node:fs');
 const { readConfig, writeConfig, clearConfig, getConfigPath, getConfigDir, readProviderKeys, writeProviderKeys } =
-  await import('../config.mjs');
+  await import('../lib/config.mjs');
 
 describe('config', () => {
   beforeEach(async () => {

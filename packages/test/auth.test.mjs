@@ -12,7 +12,7 @@ vi.mock('node:crypto', () => ({
   })),
 }));
 
-const { buildAuthUrl } = await import('../auth.mjs');
+const { buildAuthUrl } = await import('../lib/auth.mjs');
 
 describe('auth', () => {
   beforeEach(() => {
