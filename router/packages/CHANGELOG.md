@@ -1,5 +1,11 @@
 # @robot-resources/router
 
+## 4.0.1
+
+### Patch Changes
+
+- Tombstone-recovery republish: 4.0.0 was unpublished from npm during the PR 2.5 release window and the version is permanently burned on the registry. 4.0.1 ships the same package contents under a fresh version so `npx robot-resources` can resolve a stable tag again. No code changes vs 4.0.0.
+
 ## 4.0.0
 
 ### Major Changes
