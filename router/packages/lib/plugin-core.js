@@ -248,7 +248,7 @@ async function checkInstallationStatus({ localServerPort } = {}) {
     }),
     probeComponent('mcp', async () => {
       const oc = JSON.parse(readFileSync(join(homedir(), '.openclaw', 'openclaw.json'), 'utf-8'));
-      const has = !!oc?.plugins?.entries?.['openclaw-plugin']?.enabled;
+      const has = !!oc?.plugins?.entries?.['robot-resources-router']?.enabled;
       return { healthy: has, detail: has ? 'plugin registered' : 'plugin not registered' };
     }),
   ]);
@@ -290,7 +290,7 @@ async function probeComponent(name, fn) {
 }
 
 const robotResourcesPlugin = {
-  id: 'openclaw-plugin',
+  id: 'robot-resources-router',
   name: 'Robot Resources',
   description: 'Cost-optimized model routing + token-compressed web fetching',
 

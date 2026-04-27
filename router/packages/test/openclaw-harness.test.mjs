@@ -87,7 +87,7 @@ function createMockOpenClawApi(config = {}, pluginConfig = {}) {
   };
 
   const api = {
-    id: 'openclaw-plugin',
+    id: 'robot-resources-router',
     name: 'Robot Resources Router',
     version: '0.2.0',
     source: join(PLUGIN_ROOT, 'index.js'),
@@ -145,7 +145,7 @@ describe('OpenClaw harness: plugin loading', () => {
 
     expect(resolved.definition).toBeDefined();
     expect(typeof resolved.register).toBe('function');
-    expect(resolved.definition.id).toBe('openclaw-plugin');
+    expect(resolved.definition.id).toBe('robot-resources-router');
   });
 
   it('plugin id matches manifest id (OpenClaw rejects mismatches)', () => {

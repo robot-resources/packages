@@ -21,7 +21,7 @@ describe('OpenClaw SDK contract: manifest', () => {
 
   it('has required id field (string)', () => {
     expect(typeof manifest.id).toBe('string');
-    expect(manifest.id).toBe('openclaw-plugin');
+    expect(manifest.id).toBe('robot-resources-router');
   });
 
   it('has required configSchema field (object)', () => {
@@ -447,7 +447,7 @@ describe('exports', () => {
 
   it('default export on index.js is plugin shim with id', async () => {
     const mod = await import('../lib/plugin-core.js');
-    expect(mod.default.id).toBe('openclaw-plugin');
+    expect(mod.default.id).toBe('robot-resources-router');
   });
 });
 

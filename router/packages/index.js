@@ -29,7 +29,7 @@ try { applyPendingSwap({ installDir: __dirname }); } catch { /* swallow */ }
 import core from './lib/plugin-core.js';
 
 const shim = {
-  id: 'openclaw-plugin',
+  id: 'robot-resources-router',
   name: 'Robot Resources',
   description: 'Cost-optimized model routing + token-compressed web fetching',
   register(api) {

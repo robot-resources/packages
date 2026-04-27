@@ -21,8 +21,8 @@ import { applyPendingSwap, quarantinePending, readPendingMarker } from '../lib/p
 
 function makeInstallDir(version, extraFiles = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'rr-plugin-install-'));
-  writeFileSync(join(dir, 'index.js'), `// plugin ${version}\nexport default { id: 'openclaw-plugin', register() {} };\n`);
-  writeFileSync(join(dir, 'openclaw.plugin.json'), JSON.stringify({ id: 'openclaw-plugin' }, null, 2));
+  writeFileSync(join(dir, 'index.js'), `// plugin ${version}\nexport default { id: 'robot-resources-router', register() {} };\n`);
+  writeFileSync(join(dir, 'openclaw.plugin.json'), JSON.stringify({ id: 'robot-resources-router' }, null, 2));
   writeFileSync(join(dir, 'package.json'), JSON.stringify({
     name: '@robot-resources/router',
     version,
@@ -47,12 +47,12 @@ function buildTarball({ version, name = '@robot-resources/router', coreContent }
     join(pkgDir, 'package.json'),
     JSON.stringify({ name, version, type: 'module', main: 'index.js' }, null, 2),
   );
-  writeFileSync(join(pkgDir, 'index.js'), `// plugin ${version}\nexport default { id: 'openclaw-plugin', register() {} };\n`);
-  writeFileSync(join(pkgDir, 'openclaw.plugin.json'), JSON.stringify({ id: 'openclaw-plugin' }, null, 2));
+  writeFileSync(join(pkgDir, 'index.js'), `// plugin ${version}\nexport default { id: 'robot-resources-router', register() {} };\n`);
+  writeFileSync(join(pkgDir, 'openclaw.plugin.json'), JSON.stringify({ id: 'robot-resources-router' }, null, 2));
   mkdirSync(join(pkgDir, 'lib'));
   writeFileSync(
     join(pkgDir, 'lib', 'plugin-core.js'),
-    coreContent ?? `// core ${version}\nexport default { id: 'openclaw-plugin', register() {} };\n`,
+    coreContent ?? `// core ${version}\nexport default { id: 'robot-resources-router', register() {} };\n`,
   );
 
   const tarballPath = join(src, 'plugin.tgz');
@@ -538,7 +538,7 @@ describe('safe-load.handleLoadFailure', () => {
       name: '@robot-resources/router',
       version: '0.5.5',
     }, null, 2));
-    writeFileSync(join(installDir, 'openclaw.plugin.json'), JSON.stringify({ id: 'openclaw-plugin' }));
+    writeFileSync(join(installDir, 'openclaw.plugin.json'), JSON.stringify({ id: 'robot-resources-router' }));
 
     // Good backup at 0.5.4
     const bak = join(installDir, '.bak-0.5.4');
@@ -549,7 +549,7 @@ describe('safe-load.handleLoadFailure', () => {
       name: '@robot-resources/router',
       version: '0.5.4',
     }, null, 2));
-    writeFileSync(join(bak, 'openclaw.plugin.json'), JSON.stringify({ id: 'openclaw-plugin' }));
+    writeFileSync(join(bak, 'openclaw.plugin.json'), JSON.stringify({ id: 'robot-resources-router' }));
 
     const mod = await import(pathToFileURL(join(installDir, 'lib', 'safe-load.js')).href);
     await mod.handleLoadFailure(new Error('simulated register crash'));
