@@ -1,5 +1,24 @@
 # @robot-resources/router
 
+## 4.0.2
+
+### Patch Changes
+
+- a8f2b7d: PR 4a of the in-process refactor: revive the auto-update loop.
+
+  PR 2.5's npm package rename (`@robot-resources/openclaw-plugin` → `@robot-resources/router`) swept the install-time consumers but missed two runtime ones:
+
+  - `lib/self-update.js` validated downloaded tarballs against the old name → every real update would have been rejected as `wrong_package`.
+  - `platform/v1/version` (the dashboard + plugin update endpoint) polled the old npm name, which is frozen at 0.6.0 → every running plugin polling daily was told "latest = 0.6.0", and the dashboard plugin-version KPI was pinned there.
+
+  Net effect since PR 2.5: every shipped 4.x plugin's daily auto-update was silently dead. Plugins kept routing fine because the in-process server is unrelated to update polling, but no version after the one a user installed could ever reach them automatically.
+
+  This PR flips both string literals to `@robot-resources/router`, updates the corresponding test fixtures (`platform/.../version.test.ts` ×6 and `router/.../self-update.test.mjs` ×4), and stays within the package-name namespace. The OC plugin id (`openclaw-plugin` in users' `openclaw.json`) is unchanged — that rename is bundled into PR 5 with the scraper hook split.
+
+  Out-of-band after this release publishes:
+
+  - `npm deprecate @robot-resources/openclaw-plugin@'*' "Replaced by @robot-resources/router. Re-run npx robot-resources to migrate."`
+
 ## 4.0.1
 
 ### Patch Changes
