@@ -1,12 +1,14 @@
 # @robot-resources/router
 
-## 4.0.1
+## 3.0.1
 
 ### Patch Changes
 
-- Tombstone-recovery republish: 4.0.0 was unpublished from npm during the PR 2.5 release window and the version is permanently burned on the registry. 4.0.1 ships the same package contents under a fresh version so `npx robot-resources` can resolve a stable tag again. No code changes vs 4.0.0.
+- PR 3 internal cleanup. No behavior change vs 3.0.0 in the published files (`index.js`, `openclaw.plugin.json`, `lib/`). The repo around the package was significantly trimmed (Python source, Docker scaffolding, `@robot-resources/router-mcp` package, CI Python jobs all deleted) but none of that ships in this tarball.
 
-## 4.0.0
+  Note on numbering: PR 2.5's release machinery briefly published `@robot-resources/router@4.0.0` and then unpublished it. The 4.0.0 version number is permanently tombstoned on npm — it can never be republished. We continue from npm's actual latest (3.0.0) so the published-history line is contiguous and any future tombstone glitches don't compound.
+
+## 3.0.0
 
 ### Major Changes
 
