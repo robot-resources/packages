@@ -1,5 +1,25 @@
 # @robot-resources/router
 
+## 4.1.0
+
+### Minor Changes
+
+- 6107fc5: PR 5 of the in-process refactor: rename the OC-side plugin id `openclaw-plugin` → `robot-resources-router`.
+
+  PR 2.5 renamed the npm package and moved the source folder, but the OC plugin id (the string OC uses to key the plugin in `~/.openclaw/openclaw.json`) was left as the legacy `openclaw-plugin`. PR 5 closes that gap so the npm package, the source folder, the dashboard, and the user's OC config all use the same name.
+
+  What changes for users:
+
+  - **Fresh installs** of `npx robot-resources` now create `~/.openclaw/extensions/robot-resources-router/` and write `plugins.entries['robot-resources-router'] = { enabled: true }` + `plugins.allow` includes `'robot-resources-router'`.
+  - **Returning users** (anyone with a working PR 2.5+ install): re-running `npx robot-resources` writes the new entry. The old `~/.openclaw/extensions/openclaw-plugin/` directory + `plugins.entries.openclaw-plugin` entry stay orphaned on disk — harmless (OC logs and skips a plugin entry pointing at a missing directory).
+  - **`detect.js`'s OR-check is preserved** as a soft-migration helper; drop in a follow-up after telemetry shows zero installs use the legacy path.
+
+  What's NOT in this PR (originally scoped, dropped during planning):
+
+  - The strategy doc originally bundled this rename with a "scraper hook split" — moving the `before_tool_call` hook (`web_fetch` → `scraper_compress_url`) into its own OC plugin under the scraper workspace. Phase 1 exploration killed that bundle: the hook is a 20-line tool-rewrite with zero `@robot-resources/scraper` imports, splitting it adds a 5th workspace package + new publish for ~20 LOC with no current user case. Hook stays in the router plugin; revisit when PR 7 surfaces non-OC scraper consumers.
+
+  Files flipped (source): `router/packages/router/{openclaw.plugin.json,index.js,lib/plugin-core.js}`, `packages/cli/lib/{tool-config.js,wizard.js,health-report.js}`. Tests: `router/packages/router/test/{plugin,openclaw-harness,self-update}.test.mjs`, `packages/cli/test/{tool-config,health-report,detect}.test.mjs`. Total: ~30 string literals + 1 surgical test-label swap.
+
 ## 4.0.2
 
 ### Patch Changes

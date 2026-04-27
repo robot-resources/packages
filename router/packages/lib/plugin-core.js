@@ -454,28 +454,6 @@ const robotResourcesPlugin = {
       });
     }, { priority: 100 });
 
-    api.on('before_tool_call', async (event, _ctx) => {
-      if (event.tool !== 'web_fetch') return;
-
-      const url = event.params?.url;
-      if (!url) return;
-
-      api.logger.info(`[robot-resources] Redirecting web_fetch → scraper_compress_url: ${url}`);
-      logDecision('before_tool_call', {
-        original_tool: 'web_fetch',
-        redirected_to: 'scraper_compress_url',
-        url,
-      });
-
-      return {
-        toolOverride: 'scraper_compress_url',
-        paramsOverride: {
-          url,
-          mode: 'auto',
-        },
-      };
-    }, { priority: 10 });
-
     if (typeof api.registerTool === 'function') {
       api.registerTool({
         name: 'check_installation_status',
