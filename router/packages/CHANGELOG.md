@@ -1,5 +1,11 @@
 # @robot-resources/router
 
+## 4.2.0
+
+### Minor Changes
+
+- e1d5c56: feat: expose routing as a public JS library — `import { routePrompt, asyncRoutePrompt } from '@robot-resources/router/routing'` for non-OC JS/TS agents (LangChain, LangGraph, Mastra, etc.). Also exposes `./telemetry` for opt-in `route_via_lib` event posting. Zero new dependencies; the routing module never reads user provider keys (caller passes `modelsDb`), so it's safe to use outside the OC plugin context.
+
 ## 4.1.1
 
 ### Patch Changes

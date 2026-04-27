@@ -1,5 +1,16 @@
 # robot-resources
 
+## 1.11.0
+
+### Minor Changes
+
+- e1d5c56: feat(cli): interactive non-OC wizard with detection-driven defaults — replaces PR 3's print-and-exit. 5-option menu (JS / Python / Cursor-or-Claude-Code MCP / docs / install OC) via `@inquirer/prompts`. Detects cwd `package.json` / `requirements.txt` / `pyproject.toml` / `~/.cursor` / `~/.claude` to preselect the right path. New `--for=<target>` flag lets CI / non-TTY callers pick a path without prompting (`langchain`, `python`, `cursor`, `claude-code`, `docs` aliases supported). `bin/setup.js` now also auto-detects non-TTY via `process.stdin.isTTY && process.stdout.isTTY`. New `wizard_path_chosen` telemetry event tracks conversion. Plus 7 framework integration pages added to web at `/docs/{,langchain,langgraph,mastra,crewai,http-api,cursor-mcp}` so the wizard's printed URLs resolve to real content.
+
+### Patch Changes
+
+- Updated dependencies [e1d5c56]
+  - @robot-resources/router@4.2.0
+
 ## 1.10.6
 
 ### Patch Changes

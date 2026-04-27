@@ -107,15 +107,19 @@ function showPythonPath() {
   blank();
   success('Python integration');
   blank();
-  info('Install:');
-  info('  pip install robot-resources-router');
+  info('Robot Resources does not ship a Python SDK — the HTTP API is the contract.');
+  info('Drop this httpx recipe (or use requests / aiohttp / urllib) into your agent:');
   blank();
-  info('Use:');
-  info('  from rr_router import route');
-  info('  decision = route(\'write a python function\')');
+  info('  import httpx, os');
+  info('  resp = httpx.post(');
+  info('      \'https://api.robotresources.ai/v1/route\',');
+  info('      json={\'prompt\': \'write a python function\'},');
+  info('      headers={\'Authorization\': f"Bearer {os.environ[\'RR_API_KEY\']}"},');
+  info('  )');
+  info('  decision = resp.json()[\'data\']');
   info('  print(decision[\'selected_model\'])  # e.g. \'claude-haiku-4-5\'');
   blank();
-  info('Full docs: https://robotresources.ai/docs/python');
+  info('Full docs: https://robotresources.ai/docs/crewai');
   blank();
 }
 
