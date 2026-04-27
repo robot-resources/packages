@@ -124,7 +124,7 @@ export async function performSelfUpdate({
       telemetry?.emit('plugin_update_failed', { from: fromVersion, stage: 'parse_package_json' });
       return { ok: false, reason: 'parse_failed', from: fromVersion };
     }
-    if (pkg.name !== '@robot-resources/openclaw-plugin') {
+    if (pkg.name !== '@robot-resources/router') {
       telemetry?.emit('plugin_update_failed', {
         from: fromVersion,
         stage: 'validate',

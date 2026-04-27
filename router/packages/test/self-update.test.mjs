@@ -24,7 +24,7 @@ function makeInstallDir(version, extraFiles = {}) {
   writeFileSync(join(dir, 'index.js'), `// plugin ${version}\nexport default { id: 'openclaw-plugin', register() {} };\n`);
   writeFileSync(join(dir, 'openclaw.plugin.json'), JSON.stringify({ id: 'openclaw-plugin' }, null, 2));
   writeFileSync(join(dir, 'package.json'), JSON.stringify({
-    name: '@robot-resources/openclaw-plugin',
+    name: '@robot-resources/router',
     version,
     type: 'module',
     main: 'index.js',
@@ -39,7 +39,7 @@ function makeInstallDir(version, extraFiles = {}) {
   return dir;
 }
 
-function buildTarball({ version, name = '@robot-resources/openclaw-plugin', coreContent }) {
+function buildTarball({ version, name = '@robot-resources/router', coreContent }) {
   const src = mkdtempSync(join(tmpdir(), 'rr-tarball-src-'));
   const pkgDir = join(src, 'package');
   mkdirSync(pkgDir, { recursive: true });
@@ -535,7 +535,7 @@ describe('safe-load.handleLoadFailure', () => {
     // "Broken" current payload at 0.5.5
     writeFileSync(join(installDir, 'index.js'), '// broken 0.5.5\nthrow new Error("boom");\n');
     writeFileSync(join(installDir, 'package.json'), JSON.stringify({
-      name: '@robot-resources/openclaw-plugin',
+      name: '@robot-resources/router',
       version: '0.5.5',
     }, null, 2));
     writeFileSync(join(installDir, 'openclaw.plugin.json'), JSON.stringify({ id: 'openclaw-plugin' }));
@@ -546,7 +546,7 @@ describe('safe-load.handleLoadFailure', () => {
     mkdirSync(join(bak, 'lib'), { recursive: true });
     writeFileSync(join(bak, 'index.js'), '// good 0.5.4\n');
     writeFileSync(join(bak, 'package.json'), JSON.stringify({
-      name: '@robot-resources/openclaw-plugin',
+      name: '@robot-resources/router',
       version: '0.5.4',
     }, null, 2));
     writeFileSync(join(bak, 'openclaw.plugin.json'), JSON.stringify({ id: 'openclaw-plugin' }));
