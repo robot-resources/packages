@@ -1,6 +1,6 @@
 {
   "name": "@robot-resources/scraper",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Context compression for AI agents. Fetch -> Extract -> Convert pipeline without LLM dependency.",
   "author": "Robot Resources",
   "license": "MIT",

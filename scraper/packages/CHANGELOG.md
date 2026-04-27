@@ -1,5 +1,28 @@
 # @robot-resources/scraper
 
+## 0.5.0
+
+### Minor Changes
+
+- 90bbbd5: Fold `@robot-resources/scraper-tracking` into `@robot-resources/scraper` as a `./tracking` subpath export. Closes the consolidation directive: only `router`, `scraper`, and `cli` workspace packages remain on npm.
+
+  Migration for any external consumer of `@robot-resources/scraper-tracking`:
+
+  ```diff
+  -import { calculateTokensSaved } from '@robot-resources/scraper-tracking';
+  +import { calculateTokensSaved } from '@robot-resources/scraper/tracking';
+  ```
+
+  The published `@robot-resources/scraper-tracking@0.1.0` stays on npm forever; deprecation notice added out-of-band post-publish.
+
+  What changed:
+
+  - `scraper/packages/tracking/src/*` moved to `scraper/packages/scraper/src/tracking/`. Same files (`calculator`, `pricing`, `reporter`, `tracker`, `types`, `index`).
+  - `scraper`'s `tsup.config.ts` adds a third entry that emits `dist/tracking.{js,cjs,d.ts,d.cts}`.
+  - `scraper`'s `package.json` adds the `./tracking` export with both ESM + CJS conditional resolutions.
+  - Tracking's tests automatically join scraper's vitest run via the shared `src/**/*.test.ts` glob — 344 scraper tests now (combining the prior 339 with tracking's 5 files).
+  - `scraper-tracking` workspace deleted; root `workspaces` array trimmed; `publish.yml` strips all 5 integration points (paths, outputs, version-check, build/test/publish, git tag).
+
 ## 0.4.0
 
 ### Minor Changes
