@@ -119,6 +119,8 @@ export function buildUpstreamHeaders({ provider, apiKey, inboundHeaders = {} }) 
       };
       const orgHeader = inboundHeaders['openai-organization'];
       if (orgHeader) headers['openai-organization'] = orgHeader;
+      const projectHeader = inboundHeaders['openai-project'];
+      if (projectHeader) headers['openai-project'] = projectHeader;
       return headers;
     }
     case 'google': {
