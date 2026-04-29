@@ -454,3 +454,299 @@ describe('provider-key resolution per shape', () => {
     expect(opts.headers['x-goog-api-key']).toBe('AIza-gemini-only');
   });
 });
+
+// ── Within-shape filter invariant ──────────────────────────────────────
+//
+// The "classifier only picks among the inbound shape's provider" rule is
+// the load-bearing invariant of "no cross-shape body translation." A
+// regression here would let the classifier return an Anthropic model id
+// for an OpenAI request, OC would dispatch the OpenAI body to
+// api.openai.com with a bogus model, and the user would see a confusing
+// 400 from the wrong vendor. This test pins the invariant directly:
+// inbound /openai/v1/responses → asyncRoutePrompt's modelsDb contains
+// only provider==='openai' entries → chosen model is in MODELS_DB with
+// provider==='openai'.
+describe('within-shape filter invariant', () => {
+  let server;
+  let port;
+  let resetKeyCache;
+  let asyncRoutePromptSpy;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    saveEnv();
+
+    vi.doMock('../lib/routing/classify.js', () => ({
+      classifyWithLlmDetailed: vi.fn(async () => ({
+        result: { taskType: 'general', complexity: 0.3 },
+      })),
+    }));
+
+    // Wrap asyncRoutePrompt so we can capture the modelsDb it actually
+    // received from the handler. Real implementation runs underneath —
+    // we want the chosen model to come from a real selection.
+    const routerOrig = await import('../lib/routing/router.js');
+    asyncRoutePromptSpy = vi.fn((prompt, opts) => routerOrig.asyncRoutePrompt(prompt, opts));
+    vi.doMock('../lib/routing/router.js', () => ({
+      ...routerOrig,
+      asyncRoutePrompt: asyncRoutePromptSpy,
+    }));
+
+    process.env.OPENAI_API_KEY = 'sk-oai-test';
+    vi.stubGlobal('fetch', vi.fn(async () => mockStubResponse()));
+
+    const mod = await import('../lib/local-server.js');
+    const keyMod = await import('../lib/provider-keys.js');
+    resetKeyCache = keyMod._resetCache;
+    resetKeyCache();
+
+    const result = await mod.startLocalServer({
+      api: { logger: { info: vi.fn(), warn: vi.fn() }, config: {} },
+      telemetry: { emit: vi.fn() },
+      // All three providers detected — only the URL-prefix-derived
+      // shape filter should narrow the candidate set.
+      detectedProviders: new Set(['anthropic', 'openai', 'google']),
+    });
+    server = result.server;
+    port = result.port;
+  });
+
+  afterEach(async () => {
+    if (server) { await new Promise((r) => server.close(r)); server = null; }
+    if (resetKeyCache) resetKeyCache();
+    restoreEnv();
+    vi.unstubAllGlobals();
+    vi.doUnmock('../lib/routing/classify.js');
+    vi.doUnmock('../lib/routing/router.js');
+    vi.restoreAllMocks();
+  });
+
+  it('openai inbound: filteredDb is openai-only, chosen model is openai', async () => {
+    const fetchSpy = globalThis.fetch;
+
+    const res = await postLoopback({
+      port,
+      path: '/openai/v1/responses',
+      body: {
+        model: 'placeholder-openai',
+        input: 'write a python function',
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(asyncRoutePromptSpy).toHaveBeenCalledTimes(1);
+
+    const [, opts] = asyncRoutePromptSpy.mock.calls[0];
+    const filteredDb = opts.modelsDb;
+    expect(filteredDb.length).toBeGreaterThan(0);
+    for (const m of filteredDb) {
+      expect(m.provider).toBe('openai');
+    }
+
+    const sentBody = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const chosen = sentBody.model;
+    expect(chosen).not.toBe('placeholder-openai');
+    const { MODELS_DB } = await import('../lib/routing/selector.js');
+    const chosenEntry = MODELS_DB.find((m) => m.name === chosen);
+    expect(chosenEntry?.provider).toBe('openai');
+  });
+});
+
+// ── No-providers-detected passthrough branch ───────────────────────────
+//
+// When the user has no key for the inbound lab (detectedProviders does
+// NOT contain the URL-prefix-derived shape), local-server.js short-
+// circuits the classifier and forwards the request with the original
+// model id, emitting `no_providers_detected` telemetry. This is the
+// "user installed plugin, hasn't set up that lab yet" path. Without
+// this test it's invisible: 200 OK from the upstream stub looks
+// identical to a routed call.
+describe('no-providers-detected passthrough', () => {
+  let server;
+  let port;
+  let resetKeyCache;
+  let telemetryEmit;
+  let classifySpy;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    saveEnv();
+
+    classifySpy = vi.fn(async () => ({
+      result: { taskType: 'general', complexity: 0.3 },
+    }));
+    vi.doMock('../lib/routing/classify.js', () => ({
+      classifyWithLlmDetailed: classifySpy,
+    }));
+
+    // User has the env key (so the request can complete past auth) but
+    // detectedProviders is empty for openai — this is what `register()`
+    // would emit when the OC config has no openai auth profile and the
+    // env scan also missed it at boot.
+    process.env.OPENAI_API_KEY = 'sk-oai-test';
+    vi.stubGlobal('fetch', vi.fn(async () => mockStubResponse()));
+
+    const mod = await import('../lib/local-server.js');
+    const keyMod = await import('../lib/provider-keys.js');
+    resetKeyCache = keyMod._resetCache;
+    resetKeyCache();
+
+    telemetryEmit = vi.fn();
+    const result = await mod.startLocalServer({
+      api: { logger: { info: vi.fn(), warn: vi.fn() }, config: {} },
+      telemetry: { emit: telemetryEmit },
+      detectedProviders: new Set(['anthropic']), // openai NOT detected
+    });
+    server = result.server;
+    port = result.port;
+  });
+
+  afterEach(async () => {
+    if (server) { await new Promise((r) => server.close(r)); server = null; }
+    if (resetKeyCache) resetKeyCache();
+    restoreEnv();
+    vi.unstubAllGlobals();
+    vi.doUnmock('../lib/routing/classify.js');
+    vi.restoreAllMocks();
+  });
+
+  it('inbound shape not in detectedProviders → original model passthrough + no_providers_detected telemetry', async () => {
+    const fetchSpy = globalThis.fetch;
+
+    const res = await postLoopback({
+      port,
+      path: '/openai/v1/responses',
+      body: {
+        model: 'gpt-5.4',
+        input: 'write a python function',
+      },
+    });
+
+    expect(res.status).toBe(200);
+    // Classifier never ran — short-circuit happened before asyncRoutePrompt.
+    expect(classifySpy).not.toHaveBeenCalled();
+    // Original model went to upstream, unchanged.
+    const sentBody = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(sentBody.model).toBe('gpt-5.4');
+    // Telemetry recorded the gap so the dashboard can show it.
+    const noProviders = telemetryEmit.mock.calls.find(([name]) => name === 'no_providers_detected');
+    expect(noProviders).toBeDefined();
+    expect(noProviders[1]).toMatchObject({ shape: 'openai' });
+    // route_completed must NOT have fired — the classifier didn't run.
+    const routeCompleted = telemetryEmit.mock.calls.find(([name]) => name === 'route_completed');
+    expect(routeCompleted).toBeUndefined();
+  });
+});
+
+// ── Multi-chunk SSE pipe-through ───────────────────────────────────────
+//
+// Real upstream responses arrive as a stream of SSE events; OC's parser
+// consumes them lazily as bytes drain off the socket. The handler pipes
+// the upstream Web body to the Node response via
+// `Readable.fromWeb(upstream.body).pipe(res)`. Existing tests stub fetch
+// with a single-chunk text Response, which can't catch regressions like:
+//   - accidental compression header (content-encoding: gzip) without
+//     decoding bytes
+//   - buffering the whole body before pipe (kills first-byte latency)
+//   - reordering / mutating chunks
+// This test sends 3 distinct SSE chunks with a tiny async delay between
+// each, asserts all 3 land at the client byte-for-byte in order, and
+// pins the SSE content-type pass-through.
+describe('SSE pipe-through (multi-chunk)', () => {
+  let server;
+  let port;
+  let resetKeyCache;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    saveEnv();
+
+    vi.doMock('../lib/routing/classify.js', () => ({
+      classifyWithLlmDetailed: vi.fn(async () => ({
+        result: { taskType: 'general', complexity: 0.3 },
+      })),
+    }));
+
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+
+    const SSE_CHUNKS = [
+      'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_abc"}}\n\n',
+      'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"text":"Hello"}}\n\n',
+      'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+    ];
+
+    // Real upstream returns a streaming Response whose body is a Web
+    // ReadableStream. Encode each chunk and emit with a small async gap
+    // to mimic real-network arrival.
+    const streamingResponse = () => {
+      const enc = new TextEncoder();
+      const body = new ReadableStream({
+        async start(controller) {
+          for (const chunk of SSE_CHUNKS) {
+            controller.enqueue(enc.encode(chunk));
+            await new Promise((r) => setTimeout(r, 5));
+          }
+          controller.close();
+        },
+      });
+      return new Response(body, {
+        status: 200,
+        headers: {
+          'content-type': 'text/event-stream',
+          'cache-control': 'no-cache',
+        },
+      });
+    };
+
+    vi.stubGlobal('fetch', vi.fn(async () => streamingResponse()));
+
+    const mod = await import('../lib/local-server.js');
+    const keyMod = await import('../lib/provider-keys.js');
+    resetKeyCache = keyMod._resetCache;
+    resetKeyCache();
+
+    const result = await mod.startLocalServer({
+      api: { logger: { info: vi.fn(), warn: vi.fn() }, config: {} },
+      telemetry: { emit: vi.fn() },
+      detectedProviders: new Set(['anthropic']),
+    });
+    server = result.server;
+    port = result.port;
+
+    // Stash for the test body.
+    server._expectedBody = SSE_CHUNKS.join('');
+  });
+
+  afterEach(async () => {
+    if (server) { await new Promise((r) => server.close(r)); server = null; }
+    if (resetKeyCache) resetKeyCache();
+    restoreEnv();
+    vi.unstubAllGlobals();
+    vi.doUnmock('../lib/routing/classify.js');
+    vi.restoreAllMocks();
+  });
+
+  it('multi-chunk SSE upstream → all chunks arrive at client, in order, byte-for-byte', async () => {
+    const expectedBody = server._expectedBody;
+
+    const res = await postLoopback({
+      port,
+      path: '/anthropic/v1/messages',
+      body: {
+        model: 'placeholder-anthropic',
+        messages: [{ role: 'user', content: 'hi' }],
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('text/event-stream');
+    expect(res.headers['cache-control']).toBe('no-cache');
+    // The 3 chunks concatenate to the upstream's body verbatim. Any
+    // re-encoding, gzip injection, chunk reorder, or partial buffering
+    // would break this byte-equality check.
+    expect(res.body).toBe(expectedBody);
+    // Sanity: each event boundary still present (catches a "merged
+    // chunks lost their newlines" regression).
+    expect(res.body.match(/\n\n/g)?.length).toBe(3);
+  });
+});
