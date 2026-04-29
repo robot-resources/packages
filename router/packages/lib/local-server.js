@@ -1,27 +1,39 @@
 /**
- * In-process Anthropic-compatible HTTP server.
+ * In-process multi-shape HTTP server for the Robot Resources router plugin.
  *
- * OC's agent runtime dispatches via standard provider catalog (baseUrl + api).
- * Our plugin's catalog publishes baseUrl=http://127.0.0.1:<port> for the
- * 'robot-resources' provider, so OC POSTs LLM calls to this server.
+ * OC's agent runtime dispatches via standard provider catalog (per-model
+ * baseUrl + api). The plugin registers three virtual models — one per lab
+ * shape — each with a path-prefixed loopback baseUrl:
+ *
+ *   /anthropic   → api: 'anthropic-messages'    → upstream api.anthropic.com
+ *   /openai/v1   → api: 'openai-responses'      → upstream api.openai.com
+ *   /google/v1beta → api: 'google-generative-ai' → upstream generativelanguage.googleapis.com
  *
  * Per request:
- *   1. Parse the Anthropic-shaped body OC sends.
- *   2. Extract the latest user-message text → run PR 1's classifier on it
- *      → pick a real Anthropic model (claude-haiku/sonnet/opus...).
- *   3. Substitute body.model with the chosen model.
- *   4. Resolve the user's real Anthropic key from OC's auth-profile store.
- *   5. Forward to api.anthropic.com/v1/messages and pipe the SSE stream
- *      straight back unchanged. OC parses native Anthropic SSE — zero
- *      re-shaping on our end.
+ *   1. Detect the lab shape from the URL prefix.
+ *   2. Parse the native-shape body OC sends.
+ *   3. Extract the latest user text from the shape (anthropic body.messages,
+ *      openai body.input, google body.contents).
+ *   4. Run the classifier with MODELS_DB filtered to that shape's provider
+ *      → pick a real model belonging to the same lab.
+ *   5. Apply the chosen model — body.model swap for anthropic+openai;
+ *      URL path rewrite for google (its model lives in `models/{id}:method`).
+ *   6. Resolve the user's lab key via provider-keys.js.
+ *   7. Forward native-shape upstream and pipe the SSE stream straight back
+ *      unchanged. OC parses each lab's native SSE — zero re-shaping on our
+ *      end.
  *
- * Failure modes (per Manuel 2026-04-26):
- *   - empty/non-text user message OR classifier throws → leave body.model
- *     unchanged, forward as-is. (anthropic.com will reject 'robot-resources/
- *     auto'; that's acceptable visible failure for now, telemetry captures
- *     the rate, smarter fallback later if data shows it matters.)
- *   - no anthropic key found → 500 to OC with explanatory body.
- *   - upstream fetch error → 502 to OC.
+ * No cross-shape body translation. The plugin only routes within whichever
+ * lab shape OC dispatches with.
+ *
+ * Failure modes:
+ *   - unknown URL prefix → 404
+ *   - empty/non-text user message OR classifier throws → leave model
+ *     unchanged, forward as-is. (Upstream will reject the placeholder
+ *     model id; that's acceptable visible failure for now, telemetry
+ *     captures the rate.)
+ *   - no key for the inbound shape → 500 with explanatory body
+ *   - upstream fetch error → 502
  *
  * The server lives and dies with the OC gateway process. No cleanup needed
  * across restarts.
@@ -32,11 +44,18 @@ import { Readable } from 'node:stream';
 import { asyncRoutePrompt } from './routing/router.js';
 import { MODELS_DB } from './routing/selector.js';
 import { classifyWithLlmDetailed } from './routing/classify.js';
-import { resolveAnthropicKey } from './anthropic-key.js';
+import { resolveProviderKey } from './provider-keys.js';
+import {
+  detectProviderFromUrl,
+  buildUpstreamUrl,
+  buildUpstreamHeaders,
+  extractUserText,
+  applyChosenModelToBody,
+} from './upstream.js';
 
-export async function startLocalServer({ api, telemetry, providers, detectedProviders }) {
+export async function startLocalServer({ api, telemetry, detectedProviders }) {
   const server = createServer((req, res) => {
-    handleRequest(req, res, { api, telemetry, providers, detectedProviders }).catch((err) => {
+    handleRequest(req, res, { api, telemetry, detectedProviders }).catch((err) => {
       try {
         if (!res.headersSent) {
           res.writeHead(500, { 'content-type': 'application/json' });
@@ -51,12 +70,11 @@ export async function startLocalServer({ api, telemetry, providers, detectedProv
   });
 
   // Fixed loopback port so OC's static config can carry a stable baseUrl.
-  // OC validates models.providers.<id>.baseUrl strictly — a dynamic OS-chosen
-  // port would force a placeholder in openclaw.json that catalog.run would
-  // need to override at request time. Static port = simpler config + matches
-  // every other OC bundled provider's pattern. If 18790 is in use (rare on
-  // user machines), fall back to OS-chosen and accept that catalog.run is
-  // load-bearing for that install.
+  // Dynamic OS-chosen port would force a placeholder in openclaw.json that
+  // catalog.run would need to override at request time. Static port =
+  // simpler config + matches every other OC bundled provider's pattern.
+  // If 18790 is in use, fall back to OS-chosen and accept that catalog.run
+  // is load-bearing for that install.
   const PRIMARY_PORT = 18790;
   return new Promise((resolve) => {
     const tryBind = (port, isFallback) => new Promise((res, rej) => {
@@ -65,7 +83,7 @@ export async function startLocalServer({ api, telemetry, providers, detectedProv
         server.off('error', onError);
         const { port: bound } = server.address();
         api?.logger?.info?.(
-          `[robot-resources] Local Anthropic-messages server bound on 127.0.0.1:${bound}` +
+          `[robot-resources] Local multi-shape server bound on 127.0.0.1:${bound}` +
           (isFallback ? ' (fallback — primary port in use)' : ''),
         );
         telemetry?.emit?.('local_server_started', { port: bound, fallback: !!isFallback });
@@ -86,13 +104,13 @@ export async function startLocalServer({ api, telemetry, providers, detectedProv
   });
 }
 
-async function handleRequest(req, res, { api, telemetry, providers, detectedProviders }) {
+async function handleRequest(req, res, { api, telemetry, detectedProviders }) {
   const startedAt = Date.now();
 
   if (req.method !== 'POST') { res.writeHead(405).end(); return; }
-  // Accept both /v1/messages and /messages — OC's resolveAnthropicMessagesUrl
-  // appends /v1 if our baseUrl doesn't already end in it.
-  if (!req.url || !req.url.endsWith('/messages')) { res.writeHead(404).end(); return; }
+
+  const provider = detectProviderFromUrl(req.url);
+  if (!provider) { res.writeHead(404).end(); return; }
 
   let body;
   try {
@@ -103,26 +121,27 @@ async function handleRequest(req, res, { api, telemetry, providers, detectedProv
     return;
   }
 
-  const prompt = extractLatestUserText(body) || '';
-  let chosenModel = body.model;
+  const inboundModel = body.model || extractGoogleInboundModel(req.url, provider);
+  const prompt = extractUserText(provider, body) || '';
+  let chosenModel = inboundModel;
   let routingResult = null;
 
   api?.logger?.info?.(
-    `[robot-resources] handler hit — model=${body.model} promptLen=${prompt.length} msgCount=${body?.messages?.length || 0}`,
+    `[robot-resources] handler hit — shape=${provider} model=${inboundModel} promptLen=${prompt.length}`,
   );
 
   if (prompt) {
     try {
-      // detectedProviders is the snapshot taken at register time — OC's
-      // api.config goes empty after register so we can't re-detect here.
       const detected = detectedProviders instanceof Set ? detectedProviders : new Set();
-      const effective = providers && providers.length
-        ? new Set([...detected].filter((p) => providers.includes(p)))
-        : detected;
-      const filteredDb = MODELS_DB.filter((m) => effective.has(m.provider));
+      // Within-shape routing: classifier only chooses among the inbound
+      // shape's provider. Cross-shape requires body translation, which is
+      // explicitly out of scope.
+      const filteredDb = detected.has(provider)
+        ? MODELS_DB.filter((m) => m.provider === provider)
+        : [];
 
       api?.logger?.info?.(
-        `[robot-resources] detection: detected=[${[...detected].join(',')}] effective=[${[...effective].join(',')}] filteredDbSize=${filteredDb.length}`,
+        `[robot-resources] detection: shape=${provider} detected=[${[...detected].join(',')}] filteredDbSize=${filteredDb.length}`,
       );
 
       if (filteredDb.length > 0) {
@@ -136,8 +155,9 @@ async function handleRequest(req, res, { api, telemetry, providers, detectedProv
           `[robot-resources] router picked: ${chosenModel} (${routingResult.savings_percent}% savings, source=${routingResult.classification_source})`,
         );
       } else {
-        api?.logger?.warn?.('[robot-resources] no providers detected at request time — forwarding with original model');
+        api?.logger?.warn?.(`[robot-resources] no ${provider} key detected at request time — forwarding with original model`);
         telemetry?.emit?.('no_providers_detected', {
+          shape: provider,
           has_oc_config: !!api?.config?.models?.providers,
         });
       }
@@ -145,43 +165,43 @@ async function handleRequest(req, res, { api, telemetry, providers, detectedProv
       api?.logger?.warn?.(`[robot-resources] router threw: ${err?.message}`);
       telemetry?.emit?.('route_failed', {
         mode: 'in-process',
+        shape: provider,
         error_type: err?.constructor?.name ?? 'Error',
         error_message: String(err?.message ?? err).slice(0, 200),
         latency_ms: Date.now() - startedAt,
       });
-      // fall through with original body.model — visible failure upstream
+      // fall through with original model — visible failure upstream
     }
   } else {
-    api?.logger?.warn?.('[robot-resources] no user-text in body.messages — forwarding with original model');
+    api?.logger?.warn?.(`[robot-resources] no user text in ${provider} body — forwarding with original model`);
   }
 
-  body.model = chosenModel;
+  applyChosenModelToBody(provider, body, chosenModel);
 
-  const realKey = resolveAnthropicKey({ api });
+  const realKey = resolveProviderKey({ api, provider });
   if (!realKey) {
     res.writeHead(500, { 'content-type': 'application/json' });
     res.end(JSON.stringify({
       error: {
         type: 'auth',
-        message: 'Robot Resources router: no Anthropic API key found in OC auth profiles or ANTHROPIC_API_KEY env',
+        message: `Robot Resources router: no ${provider} API key found in OC auth profiles or env`,
       },
     }));
-    telemetry?.emit?.('local_server_no_key', {});
+    telemetry?.emit?.('local_server_no_key', { shape: provider });
     return;
   }
 
-  const upstreamHeaders = {
-    'content-type': 'application/json',
-    'x-api-key': realKey,
-    'anthropic-version': req.headers['anthropic-version'] || '2023-06-01',
-  };
-  const beta = req.headers['anthropic-beta'];
-  if (beta) upstreamHeaders['anthropic-beta'] = Array.isArray(beta) ? beta.join(',') : beta;
+  const upstreamUrl = buildUpstreamUrl({ provider, inboundUrl: req.url, chosenModel });
+  const upstreamHeaders = buildUpstreamHeaders({
+    provider,
+    apiKey: realKey,
+    inboundHeaders: req.headers,
+  });
 
-  api?.logger?.info?.(`[robot-resources] forwarding to api.anthropic.com — model=${body.model}`);
+  api?.logger?.info?.(`[robot-resources] forwarding to ${upstreamUrl} — model=${chosenModel}`);
   let upstream;
   try {
-    upstream = await fetch('https://api.anthropic.com/v1/messages', {
+    upstream = await fetch(upstreamUrl, {
       method: 'POST',
       headers: upstreamHeaders,
       body: JSON.stringify(body),
@@ -193,6 +213,7 @@ async function handleRequest(req, res, { api, telemetry, providers, detectedProv
       error: { type: 'upstream', message: String(err?.message || err).slice(0, 200) },
     }));
     telemetry?.emit?.('local_server_upstream_failed', {
+      shape: provider,
       error: String(err?.message || err).slice(0, 200),
       latency_ms: Date.now() - startedAt,
     });
@@ -214,7 +235,7 @@ async function handleRequest(req, res, { api, telemetry, providers, detectedProv
   }
 
   const passHeaders = {};
-  for (const h of ['content-type', 'cache-control', 'anthropic-request-id']) {
+  for (const h of ['content-type', 'cache-control', 'anthropic-request-id', 'openai-organization', 'x-request-id']) {
     const v = upstream.headers.get(h);
     if (v) passHeaders[h] = v;
   }
@@ -233,17 +254,11 @@ function readAll(req) {
   });
 }
 
-function extractLatestUserText(body) {
-  const msgs = body?.messages;
-  if (!Array.isArray(msgs)) return null;
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    const m = msgs[i];
-    if (m?.role !== 'user') continue;
-    if (typeof m.content === 'string') return m.content;
-    if (Array.isArray(m.content)) {
-      const textBlock = m.content.find((b) => b?.type === 'text' && typeof b.text === 'string');
-      if (textBlock) return textBlock.text;
-    }
-  }
-  return null;
+// Google's generateContent puts the model in the URL path, not the body.
+// Pull it out of `/google/.../models/<id>:method` so logs and telemetry
+// have the inbound model name even before the classifier picks one.
+function extractGoogleInboundModel(url, provider) {
+  if (provider !== 'google' || !url) return undefined;
+  const m = url.match(/\/models\/([^:?]+)/);
+  return m ? decodeURIComponent(m[1]) : undefined;
 }

@@ -18,6 +18,7 @@ import { asyncRoutePrompt } from './routing/router.js';
 import { MODELS_DB } from './routing/selector.js';
 import { classifyWithLlmDetailed } from './routing/classify.js';
 import { startLocalServer } from './local-server.js';
+import { PROVIDERS, localBaseUrlPath, ocApiString } from './upstream.js';
 
 const DEBUG = !!process.env.RR_DEBUG;
 let _debugPath = null;
@@ -362,31 +363,28 @@ const robotResourcesPlugin = {
       }
     } catch { /* no wizard-status or parse error */ }
 
-    // Hard-constrain routing to anthropic. The local HTTP server forwards
-    // unconditionally to api.anthropic.com — picking a non-anthropic model
-    // would cause anthropic to 404. Multi-provider support is a separate
-    // refactor; for now the upstream is anthropic-only regardless of which
-    // providers OC has configured. (Subscription-mode detection is informational.)
-    const providers = ['anthropic'];
-
+    // Per-shape filtering is enforced in the local HTTP server: each path
+    // prefix (/anthropic, /openai, /google) constrains the classifier to
+    // that shape's provider, so the model swap stays native to the wire
+    // format OC dispatches with.
+    //
     // Snapshot detected providers ONCE at register time. OC's `api.config`
     // is populated during register() but goes empty afterward — the plugin
     // SDK doesn't keep a live config reference for handlers that fire later.
     // So we materialise the detection now and pass the resulting Set to the
-    // server. (Subscription mode already constrains via `providers` above.)
+    // server. (Subscription mode is informational — telemetry only.)
     const detectedProviders = getAvailableProviders(api);
     api.logger.info(
       `[robot-resources] Detected providers at register: [${[...detectedProviders].join(',') || '(none)'}]`,
     );
 
-    // Bind the in-process Anthropic-messages server. The port is fixed
-    // (18790) so the static openclaw.json baseUrl stays valid across plugin
-    // restarts; falls back to OS-chosen if 18790 is busy.
+    // Bind the in-process multi-shape server. The port is fixed (18790) so
+    // the static openclaw.json baseUrl stays valid across plugin restarts;
+    // falls back to OS-chosen if 18790 is busy.
     let _localServerPort = null;
     const _localServerStartPromise = startLocalServer({
       api,
       telemetry,
-      providers,
       detectedProviders,
     }).then(({ port }) => { _localServerPort = port; })
       .catch((err) => {
@@ -465,50 +463,60 @@ const robotResourcesPlugin = {
       });
     }
 
-    // Register as a real OC provider with a single virtual model
-    // robot-resources/auto. When the user sets that as their defaultModel,
-    // OC's agent runtime dispatches LLM calls to baseUrl below — which is
-    // our in-process HTTP server. The server runs the JS classifier on the
-    // prompt, picks a real Anthropic model, and forwards to api.anthropic.com.
+    // Register as a real OC provider with three virtual models — one per
+    // lab shape. When the user sets one as their defaultModel, OC's agent
+    // runtime dispatches LLM calls to that model's baseUrl below — which
+    // is our in-process HTTP server, on the path matching the lab. The
+    // server runs the JS classifier on the prompt (constrained to that
+    // shape's provider), picks a real model, and forwards native-shape
+    // upstream.
     //
-    // We use baseUrl dispatch instead of plugin SDK hooks because OC's agent
-    // runtime (the path Telegram → agent uses) does not invoke ANY plugin
-    // SDK hooks (before_model_resolve, before_agent_start, wrapStreamFn,
-    // etc.). Provider catalog dispatch with baseUrl + api: 'anthropic-
-    // messages' IS alive in that runtime — same path the bundled anthropic
+    // We use baseUrl dispatch instead of plugin SDK hooks because OC's
+    // agent runtime (the path Telegram → agent uses) does not invoke ANY
+    // plugin SDK hooks (before_model_resolve, before_agent_start,
+    // wrapStreamFn, etc.). Provider catalog dispatch with baseUrl + per-
+    // model api IS alive in that runtime — same path every bundled lab
     // provider uses.
     if (typeof api.registerProvider === 'function') {
-      // Static model definition used in both configPatch (which OC validates
-      // strictly — no `provider` key allowed there) and catalog.run output.
-      // The model belongs to `robot-resources` because of its parent key in
-      // models.providers; no need to repeat the provider field on the model.
-      const ROBOT_RESOURCES_MODEL_DEF = {
-        id: 'auto',
-        name: 'Robot Resources Auto',
-        api: 'anthropic-messages',
+      // Per-shape virtual model. id namespaces the lab; api selects OC's
+      // dispatch shape; baseUrl path-prefixes the request so our handler
+      // can disambiguate by URL prefix. The model belongs to
+      // `robot-resources` because of its parent key in models.providers;
+      // no need to repeat the provider field on the model.
+      const buildModelDef = (shape, port) => ({
+        id: `auto-${shape}`,
+        name: `Robot Resources Auto (${shape})`,
+        api: ocApiString(shape),
+        baseUrl: `http://127.0.0.1:${port}${localBaseUrlPath(shape)}`,
         reasoning: false,
         input: ['text', 'image'],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: 200_000,
         maxTokens: 8_192,
-      };
+      });
 
       // catalog.run is awaited by OC each time it builds the provider
-      // catalog. We block on the local server bind so the returned baseUrl
-      // points at the OS-chosen port. If the bind failed, return a config
-      // without baseUrl — OC will surface the missing-transport error
-      // visibly rather than silently routing to a dead URL.
+      // catalog. We block on the local server bind so the returned model
+      // baseUrls point at the OS-chosen port. If the bind failed, return
+      // a config without baseUrls — OC will surface the missing-transport
+      // error visibly rather than silently routing to a dead URL.
       const buildProviderConfig = async () => {
         await _localServerStartPromise;
         const cfg = {
           apiKey: 'n/a',
-          api: 'anthropic-messages',
+          api: 'anthropic-messages', // provider-default; per-model api wins
           authHeader: false,
-          models: [ROBOT_RESOURCES_MODEL_DEF],
+          models: _localServerPort != null
+            ? PROVIDERS.map((p) => buildModelDef(p, _localServerPort))
+            : PROVIDERS.map((p) => ({ ...buildModelDef(p, 0), baseUrl: undefined })),
         };
         if (_localServerPort != null) cfg.baseUrl = `http://127.0.0.1:${_localServerPort}`;
         return cfg;
       };
+
+      const defaultModelEntries = Object.fromEntries(
+        PROVIDERS.map((p) => [`robot-resources/auto-${p}`, {}]),
+      );
 
       api.registerProvider({
         id: 'robot-resources',
@@ -517,7 +525,7 @@ const robotResourcesPlugin = {
         auth: [{
           id: 'local',
           label: 'No additional setup',
-          hint: 'Routing reuses your existing Anthropic key',
+          hint: 'Routing reuses the lab key OC already has configured',
           kind: 'custom',
           run: async (_authCtx) => ({
             profiles: [{
@@ -526,10 +534,10 @@ const robotResourcesPlugin = {
             }],
             configPatch: {
               models: { providers: { 'robot-resources': await buildProviderConfig() } },
-              agents: { defaults: { models: { 'robot-resources/auto': {} } } },
+              agents: { defaults: { models: defaultModelEntries } },
             },
-            defaultModel: 'robot-resources/auto',
-            notes: ['Auto-routes between Anthropic models per prompt. Uses your existing Anthropic key.'],
+            defaultModel: 'robot-resources/auto-anthropic',
+            notes: ['Auto-routes between models per prompt within the lab shape OC dispatches with. Uses your existing lab key.'],
           }),
         }],
         catalog: {
@@ -541,7 +549,7 @@ const robotResourcesPlugin = {
           run: async () => ({ provider: await buildProviderConfig() }),
         },
       });
-      api.logger.info('[robot-resources] Provider registered: robot-resources/auto');
+      api.logger.info(`[robot-resources] Provider registered: ${PROVIDERS.map((p) => `robot-resources/auto-${p}`).join(', ')}`);
     } else {
       api.logger.warn('[robot-resources] api.registerProvider not available — provider not registered');
     }
