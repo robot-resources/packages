@@ -32,12 +32,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/robot-resources/robot-resources.git",
+    "url": "git+https://github.com/robot-resources/packages.git",
     "directory": "router/packages/router"
   },
   "homepage": "https://robotresources.ai",
   "bugs": {
-    "url": "https://github.com/robot-resources/robot-resources/issues"
+    "url": "https://github.com/robot-resources/packages/issues"
   },
   "license": "MIT",
   "author": "Robot Resources Team",

@@ -301,7 +301,7 @@ function configureOpenClaw() {
       );
     }
 
-    instructions.push('Docs: https://github.com/robot-resources/robot-resources');
+    instructions.push('Docs: https://github.com/robot-resources/packages');
 
     return {
       name: 'OpenClaw',
@@ -339,7 +339,7 @@ function printManualInstructions() {
       '  #   OpenAI(base_url="http://localhost:3838/v1")',
       '  #   model = "gemini-2.5-flash"',
       '',
-      'Docs: https://github.com/robot-resources/robot-resources',
+      'Docs: https://github.com/robot-resources/packages',
     ],
   };
 }

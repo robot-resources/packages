@@ -81,7 +81,7 @@ Free. Unlimited. Your API keys never leave your machine.
 - Dashboard: https://robotresources.ai/dashboard
 - HTTP API: `POST https://api.robotresources.ai/v1/route`
 - npm: https://www.npmjs.com/package/robot-resources
-- GitHub: https://github.com/robot-resources/robot-resources
+- GitHub: https://github.com/robot-resources/packages
 - Discord: https://robotresources.ai/discord
 - Contact: agent@robotresources.ai
 - Agent docs: https://robotresources.ai/llms.txt

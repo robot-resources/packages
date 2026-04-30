@@ -38,12 +38,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/robot-resources/robot-resources.git",
+    "url": "git+https://github.com/robot-resources/packages.git",
     "directory": "scraper/packages/scraper-oc-plugin"
   },
   "homepage": "https://robotresources.ai",
   "bugs": {
-    "url": "https://github.com/robot-resources/robot-resources/issues"
+    "url": "https://github.com/robot-resources/packages/issues"
   },
   "publishConfig": {
     "access": "public"

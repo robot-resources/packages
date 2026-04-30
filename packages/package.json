@@ -46,7 +46,7 @@
   },
   "homepage": "https://robotresources.ai",
   "bugs": {
-    "url": "https://github.com/robot-resources/robot-resources/issues"
+    "url": "https://github.com/robot-resources/packages/issues"
   },
   "publishConfig": {
     "access": "public"

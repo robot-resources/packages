@@ -159,7 +159,7 @@ function showDocsPath() {
   blank();
   info('Integration guides: https://robotresources.ai/docs');
   info('HTTP API:          https://robotresources.ai/docs/http-api');
-  info('GitHub:            https://github.com/robot-resources/robot-resources');
+  info('GitHub:            https://github.com/robot-resources/packages');
   blank();
 }
 

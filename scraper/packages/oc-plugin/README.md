@@ -33,4 +33,4 @@ agent calls web_fetch(url)
 
 ## Source
 
-[github.com/robot-resources/robot-resources](https://github.com/robot-resources/robot-resources/tree/main/scraper/packages/scraper-oc-plugin)
+[github.com/robot-resources/packages](https://github.com/robot-resources/packages/tree/main/scraper/packages/scraper-oc-plugin)
