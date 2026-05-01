@@ -1,5 +1,15 @@
 # @robot-resources/router
 
+## 4.3.1
+
+### Patch Changes
+
+- 15e0cea: Fix two production-broken signals discovered during 2026-05-01 fleet diagnostic:
+
+  **Platform — classifier model.** `gemini-1.5-flash-8b` was deprecated and shut down by Google in 2026-Q2; every `/v1/route` call to the slow path AND every router-side classify call returned HTTP 404, which our catch-all telemetry mislabeled as `network_error`. Every install in the fleet was falling back to keyword routing on every prompt. Switched to `gemini-2.5-flash-lite` — same flavor (smallest/cheapest/fastest), works with the existing free-tier `CLASSIFIER_GOOGLE_API_KEY`, verified live from the openclaw droplet (HTTP 200 vs 404 on the dead model).
+
+  **Router — recurring heartbeat.** `plugin_register` fired exactly once per OC process with no retry; a single bad fetch at boot (network blip / transient platform 5xx / DNS hiccup before networking was ready) stranded the install as a silent fleet member until the next OC restart. Added a 15-min recurring `router_heartbeat` (same shape and cadence as the retired python `router_heartbeat`) so one missed tick is recovered on the next.
+
 ## 4.3.0
 
 ### Minor Changes

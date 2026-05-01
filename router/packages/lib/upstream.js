@@ -58,14 +58,24 @@ export function ocApiString(provider) {
 }
 
 /**
- * Match an inbound request URL to a provider by path prefix. Returns null if
- * the URL doesn't match any known shape.
+ * Match an inbound request URL to a provider. Recognizes both the multi-shape
+ * prefix (`/anthropic/...`) and bare lab-native URLs (`/v1/messages`,
+ * `/v1/responses`, `:generateContent`). The bare-URL fallback is what the
+ * v2.x python daemon used — it's resilient when OC dispatches via
+ * provider.baseUrl (no prefix) instead of model.baseUrl (prefixed).
  */
 export function detectProviderFromUrl(url) {
   if (!url) return null;
+  // Multi-shape prefix path.
   if (url.startsWith(LOCAL_PREFIX.anthropic + '/')) return 'anthropic';
   if (url.startsWith(LOCAL_PREFIX.openai + '/')) return 'openai';
   if (url.startsWith(LOCAL_PREFIX.google + '/')) return 'google';
+  // Bare lab-native path. Each lab's API path is already unique, so the URL
+  // semantics alone identify the shape.
+  const path = url.split('?')[0];
+  if (path.endsWith('/messages') || path.endsWith('/v1/messages')) return 'anthropic';
+  if (path.endsWith('/responses') || path.endsWith('/chat/completions')) return 'openai';
+  if (path.includes(':generateContent') || path.includes(':streamGenerateContent')) return 'google';
   return null;
 }
 
@@ -83,9 +93,10 @@ export function detectProviderFromUrl(url) {
 export function buildUpstreamUrl({ provider, inboundUrl, chosenModel }) {
   const prefix = LOCAL_PREFIX[provider];
   if (!prefix) throw new Error(`unknown provider: ${provider}`);
-  if (!inboundUrl.startsWith(prefix)) throw new Error(`url ${inboundUrl} does not match ${provider} prefix`);
 
-  let suffix = inboundUrl.slice(prefix.length); // e.g. '/v1/messages' or '/v1beta/models/gemini-2.5-pro:streamGenerateContent?alt=sse'
+  // Strip the multi-shape prefix only if it's present. Bare lab-native URLs
+  // (e.g. `/v1/messages` from OC's provider.baseUrl path) pass through as-is.
+  let suffix = inboundUrl.startsWith(prefix + '/') ? inboundUrl.slice(prefix.length) : inboundUrl;
 
   if (provider === 'google' && chosenModel) {
     // Replace 'models/<old>:method' → 'models/<new>:method'. Keep query string intact.

@@ -178,13 +178,13 @@ async function handleRequest(req, res, { api, telemetry, detectedProviders }) {
 
   applyChosenModelToBody(provider, body, chosenModel);
 
-  const realKey = resolveProviderKey({ api, provider });
+  const realKey = resolveProviderKey({ api, provider, requestHeaders: req.headers });
   if (!realKey) {
     res.writeHead(500, { 'content-type': 'application/json' });
     res.end(JSON.stringify({
       error: {
         type: 'auth',
-        message: `Robot Resources router: no ${provider} API key found in OC auth profiles or env`,
+        message: `Robot Resources router: no ${provider} API key in request headers, OC auth profiles, or env`,
       },
     }));
     telemetry?.emit?.('local_server_no_key', { shape: provider });

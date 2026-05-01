@@ -1,19 +1,20 @@
 /**
  * Locate the user's API key for a given LLM provider.
  *
- * The OC plugin SDK doesn't expose a synchronous "get me the resolved api
- * key for provider X" helper, but the bundled providers store their keys
- * in the agent's auth-profile store. We read the same files directly.
- *
- * Resolution order per provider (first hit wins, then cached for the
- * process lifetime — keyed by provider so an Anthropic miss doesn't
- * poison the OpenAI lookup):
+ * Resolution order (first hit wins):
+ *   0. requestHeaders — per-request, NOT cached. Mirrors the v2.x python
+ *      daemon: whatever key OC sends in the request is the key we forward
+ *      upstream. Robust against stored-config drift (which broke routing
+ *      when openclaw.json fell out of sync with the plugin manifest).
  *   1. api.config.models.providers.<provider>.apiKey  (explicit OC config)
  *   2. ~/.openclaw/agents/<agent>/agent/auth-profiles.json  ('main' first,
  *      then alpha) — pick first profile with provider matching and a key
  *      that looks real
  *   3. process.env.<PROVIDER>_API_KEY  (and GEMINI_API_KEY for google)
  *   4. null  (caller surfaces an error to OC)
+ *
+ * Steps 1-3 are cached for the process lifetime, keyed by provider. Step 0
+ * never caches — the header value is request-scoped.
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
@@ -28,8 +29,31 @@ const ENV_VARS = {
   google: ['GOOGLE_API_KEY', 'GEMINI_API_KEY'],
 };
 
-export function resolveProviderKey({ api, provider } = {}) {
+const HEADER_NAMES = {
+  anthropic: ['x-api-key'],
+  openai: ['authorization'],
+  google: ['x-goog-api-key'],
+};
+
+function readKeyFromHeaders(headers, provider) {
+  if (!headers) return null;
+  for (const name of HEADER_NAMES[provider] || []) {
+    const raw = headers[name] ?? headers[name.toLowerCase()];
+    if (typeof raw !== 'string' || !raw) continue;
+    const value = name === 'authorization' ? raw.replace(/^Bearer\s+/i, '') : raw;
+    if (looksReal(value)) return value;
+  }
+  return null;
+}
+
+export function resolveProviderKey({ api, provider, requestHeaders } = {}) {
   if (!provider) return null;
+
+  // Per-request header — never cached; the value belongs to this specific
+  // request. Cheap to re-read each call.
+  const fromHeader = readKeyFromHeaders(requestHeaders, provider);
+  if (fromHeader) return fromHeader;
+
   if (_cache.has(provider)) return _cache.get(provider);
 
   const fromConfig = api?.config?.models?.providers?.[provider]?.apiKey

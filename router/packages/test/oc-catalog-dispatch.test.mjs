@@ -318,10 +318,13 @@ describe('local server dispatch — per-shape forwarding', () => {
     expect(opts.headers['x-goog-api-key']).toBe('AIza-test');
   });
 
-  it('unknown URL prefix → 404, fetch never called', async () => {
+  it('unknown URL → 404, fetch never called', async () => {
+    // URL doesn't end in any lab-native suffix (/messages, /responses,
+    // :generateContent, :streamGenerateContent, /chat/completions) and has no
+    // /anthropic, /openai, /google prefix — genuinely unrecognizable.
     const res = await postLoopback({
       port,
-      path: '/unknown/v1/messages',
+      path: '/random/unknown/path',
       body: { messages: [{ role: 'user', content: 'hi' }] },
     });
 
