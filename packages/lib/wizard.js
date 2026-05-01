@@ -45,24 +45,17 @@ const CLI_VERSION = (() => {
 export async function runWizard({ nonInteractive = false, target = null } = {}) {
   header();
 
-  // Non-OC branch. Hands off to the multi-agent compatibility wizard which
-  // routes the user to the right install path (npm install / pip install /
-  // MCP config / docs / install-OC). Non-interactive callers bypass into the
-  // OC install path only when --for=<target> isn't supplied; otherwise they
-  // get the print-and-exit hint with the supported --for= options.
-  // Pre-PR-8 this was a 17-line print-and-exit; PR 8 made it interactive.
-  if (!isOpenClawInstalled()) {
-    await runNonOcWizard({ nonInteractive, target });
-    return;
-  }
-
+  // Detect OC once up front. Used both to branch into the non-OC wizard and
+  // to tag the wizard_started payload, so the funnel can be segmented OC vs
+  // non-OC without a second event type.
+  const openclawDetected = isOpenClawInstalled();
   const wizardStartMs = Date.now();
 
   const results = {
     auth: false,
     authMethod: null, // 'config' | 'apikey' | 'auto'
     pluginInstalled: false,
-    openclawDetected: false,
+    openclawDetected,
     openclawConfigPatched: false,
     scraperMcpRegistered: false,
     scraper: false,
@@ -70,9 +63,11 @@ export async function runWizard({ nonInteractive = false, target = null } = {}) 
 
   // ── Step 0: Provision API key (before anything else) ────────────────────
   //
-  // Provision early so config.json exists before any tool installs.
-  // If the session dies later, telemetry still works for all tools.
-  // Single fetch() with 10s timeout — no prompts, no browser.
+  // Runs for BOTH the OC and non-OC paths. Provisioning before the non-OC
+  // hand-off closes the funnel blind spot where every non-OpenClaw install
+  // was invisible to telemetry (no api_keys row, no wizard_started, no
+  // agent_signup_meta). If the session dies later, telemetry still works
+  // for all tools. Single fetch() with 10s timeout — no prompts, no browser.
 
   {
     const config = readConfig();
@@ -116,10 +111,11 @@ export async function runWizard({ nonInteractive = false, target = null } = {}) 
 
   // ── Funnel marker: wizard_started ───────────────────────────────────────
   //
-  // Sent immediately after auth so we have proof the wizard reached this
-  // point even if any install step crashes. Pairs with install_complete at
-  // the end to give us a "started → completed" funnel for diagnosing silent
-  // signups. Fire-and-forget — never fatal.
+  // Sent immediately after auth, before either path branches, so we have
+  // proof the wizard reached this point even if a later step crashes. Pairs
+  // with install_complete (OC path) or wizard_path_chosen (non-OC path) to
+  // give us a "started → done" funnel. The openclaw_detected field lets us
+  // segment OC vs non-OC funnels without a second event type.
   //
   // Timeout asymmetry vs install_complete (5s, no retry vs 10s × 2 attempts):
   // wizard_started is a best-effort funnel marker — losing it just means we
@@ -144,6 +140,7 @@ export async function runWizard({ nonInteractive = false, target = null } = {}) 
             cli_version: CLI_VERSION,
             auth_method: results.authMethod,
             non_interactive: nonInteractive,
+            openclaw_detected: openclawDetected,
           },
         }),
         signal: AbortSignal.timeout(5_000),
@@ -151,6 +148,15 @@ export async function runWizard({ nonInteractive = false, target = null } = {}) 
     } catch {
       // Non-fatal — wizard_started is best-effort
     }
+  }
+
+  // Non-OC branch. Hands off to the multi-agent compatibility wizard which
+  // routes the user to the right install path (npm install / pip install /
+  // MCP config / docs / install-OC). The non-OC wizard's wizard_path_chosen
+  // telemetry now fires too, since Step 0 above provisioned an api_key.
+  if (!openclawDetected) {
+    await runNonOcWizard({ nonInteractive, target });
+    return;
   }
 
   // ── Step 1: Tool Routing Configuration ──────────────────────────────────
@@ -166,7 +172,6 @@ export async function runWizard({ nonInteractive = false, target = null } = {}) 
   const toolResults = configureToolRouting();
   results.tools = toolResults;
 
-  results.openclawDetected = isOpenClawInstalled();
   const ocResult = toolResults.find((r) => r.name === 'OpenClaw');
   if (ocResult) {
     results.pluginInstalled =
@@ -384,7 +389,7 @@ export async function runWizard({ nonInteractive = false, target = null } = {}) 
   // Telegram survives this restart. If the session dies here, the agent
   // picks up on the next message with all tools loaded.
 
-  if (isOpenClawInstalled() && (results.tools?.some(r => r.action === 'installed') || scraperRegistered)) {
+  if (openclawDetected && (results.tools?.some(r => r.action === 'installed') || scraperRegistered)) {
     try {
       await restartOpenClawGateway();
       success('OpenClaw gateway restarted');

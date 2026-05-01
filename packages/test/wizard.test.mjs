@@ -65,19 +65,22 @@ const { warn, info } = await import('../lib/ui.js');
 const { runNonOcWizard } = await import('../lib/non-oc-wizard.js');
 const { runWizard } = await import('../lib/wizard.js');
 
-// Capture install_complete payloads sent via fetch.
-function captureInstallPayload() {
-  const installCalls = globalThis.fetch.mock.calls.filter(
+// Capture telemetry payloads sent via fetch, by event_type.
+function captureTelemetryPayload(eventType) {
+  const calls = globalThis.fetch.mock.calls.filter(
     (c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'),
   );
-  for (const call of installCalls) {
+  for (const call of calls) {
     const body = call[1]?.body;
     if (!body) continue;
     const parsed = JSON.parse(body);
-    if (parsed.event_type === 'install_complete') return parsed.payload;
+    if (parsed.event_type === eventType) return parsed.payload;
   }
   return null;
 }
+
+const captureInstallPayload = () => captureTelemetryPayload('install_complete');
+const captureWizardStartedPayload = () => captureTelemetryPayload('wizard_started');
 
 describe('wizard (Option 4 — in-process server, no daemon-install path)', () => {
   beforeEach(() => {
@@ -90,8 +93,6 @@ describe('wizard (Option 4 — in-process server, no daemon-install path)', () =
 
   describe('signup', () => {
     it('calls /v1/auth/signup when no api_key on disk and RR_API_KEY unset', async () => {
-      // Signup only runs past the non-OC early-exit guard. OC must be
-      // present (or nonInteractive=true) for the wizard body to execute.
       isOpenClawInstalled.mockReturnValue(true);
       readConfig.mockReturnValue({});
       delete process.env.RR_API_KEY;
@@ -172,22 +173,54 @@ describe('wizard (Option 4 — in-process server, no daemon-install path)', () =
   });
 
   describe('OpenClaw absent', () => {
-    it('hands off interactive non-OC runs to runNonOcWizard with no provisioning', async () => {
+    it('provisions api_key + fires wizard_started before handing off to runNonOcWizard', async () => {
+      // Closes the funnel blind spot: every non-OpenClaw install used to be
+      // invisible (no api_keys row, no wizard_started, no agent_signup_meta)
+      // because the early-exit ran before Step 0 + the wizard_started emit.
       isOpenClawInstalled.mockReturnValue(false);
       readConfig.mockReturnValue({});
       delete process.env.RR_API_KEY;
-      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true });
+      globalThis.fetch = vi.fn().mockImplementation((url) => {
+        if (typeof url === 'string' && url.includes('/v1/auth/signup')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ data: {
+              api_key: 'rr_live_new',
+              key_id: 'key-uuid',
+              claim_url: 'https://robotresources.ai/claim?token=abc',
+            }}),
+          });
+        }
+        return Promise.resolve({ ok: true });
+      });
 
       await runWizard({ nonInteractive: false });
 
-      // The wizard body must NOT run: no signup, no telemetry, no status file.
-      expect(writeConfig).not.toHaveBeenCalled();
-      expect(globalThis.fetch).not.toHaveBeenCalled();
+      // Signup writes the new api_key to config.
+      expect(writeConfig).toHaveBeenCalledWith(expect.objectContaining({
+        api_key: 'rr_live_new',
+        signup_source: 'auto',
+      }));
+
+      // wizard_started fires with openclaw_detected: false so the funnel
+      // can be segmented OC vs non-OC.
+      const wizardStarted = captureWizardStartedPayload();
+      expect(wizardStarted).toEqual(expect.objectContaining({
+        openclaw_detected: false,
+        auth_method: 'auto',
+        non_interactive: false,
+      }));
+
+      // OC-only telemetry (install_complete) is NOT sent on the non-OC path.
+      expect(captureInstallPayload()).toBeNull();
+
+      // Status file is NOT written (nothing was actually installed locally).
       const statusCall = writeFileSync.mock.calls.find(
         (c) => typeof c[0] === 'string' && c[0].includes('wizard-status.json'),
       );
       expect(statusCall).toBeFalsy();
-      // Hand-off to the non-OC wizard happens with the right options.
+
+      // Hand-off to the non-OC wizard still happens with the right options.
       expect(runNonOcWizard).toHaveBeenCalledWith({ nonInteractive: false, target: null });
     });
 
@@ -207,6 +240,46 @@ describe('wizard (Option 4 — in-process server, no daemon-install path)', () =
       // No wizard body — runNonOcWizard handles it.
       expect(configureToolRouting).not.toHaveBeenCalled();
       expect(runNonOcWizard).toHaveBeenCalledWith({ nonInteractive: true, target: 'langchain' });
+    });
+  });
+
+  describe('wizard_started telemetry', () => {
+    it('tags openclaw_detected: true when OpenClaw is present', async () => {
+      isOpenClawInstalled.mockReturnValue(true);
+      readConfig.mockReturnValue({ api_key: 'rr_live_existing' });
+      configureToolRouting.mockReturnValue([
+        { name: 'OpenClaw', action: 'installed', configActivated: true },
+      ]);
+
+      await runWizard({ nonInteractive: false });
+
+      const payload = captureWizardStartedPayload();
+      expect(payload).toEqual(expect.objectContaining({
+        openclaw_detected: true,
+        cli_version: expect.any(String),
+        auth_method: 'config',
+      }));
+    });
+
+    it('does not fire when signup fails (results.auth stays false)', async () => {
+      isOpenClawInstalled.mockReturnValue(false);
+      readConfig.mockReturnValue({});
+      delete process.env.RR_API_KEY;
+      // Signup returns non-ok → results.auth never flips, wizard_started
+      // is suppressed (no api_key to authenticate the telemetry POST anyway).
+      globalThis.fetch = vi.fn().mockImplementation((url) => {
+        if (typeof url === 'string' && url.includes('/v1/auth/signup')) {
+          return Promise.resolve({ ok: false });
+        }
+        return Promise.resolve({ ok: true });
+      });
+
+      await runWizard({ nonInteractive: false });
+
+      expect(captureWizardStartedPayload()).toBeNull();
+      // Hand-off to non-OC wizard still happens — the install path is
+      // independent of telemetry success.
+      expect(runNonOcWizard).toHaveBeenCalled();
     });
   });
 
