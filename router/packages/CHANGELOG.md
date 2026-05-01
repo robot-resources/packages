@@ -1,5 +1,17 @@
 # @robot-resources/router
 
+## 4.3.2
+
+### Patch Changes
+
+- 18af7da: Restore two robustness behaviors from the v2.x python daemon that were lost across the in-process refactor (#173) and multi-lab dispatch (#196).
+
+  **1. URL-semantics shape detection.** `detectProviderFromUrl` now recognizes bare lab-native URLs (`/v1/messages`, `/v1/responses`, `:generateContent`) in addition to the multi-shape prefix path (`/anthropic/...`). When OC dispatches via `provider.baseUrl` (no shape prefix) instead of `model.baseUrl` (prefixed), the router still recognizes the shape from the URL alone. `buildUpstreamUrl` correspondingly handles bare URLs without requiring the prefix to strip.
+
+  **2. Request-header keys take priority.** `resolveProviderKey` now reads from request headers (`x-api-key`, `Authorization: Bearer`, `x-goog-api-key`) before falling back to stored OC config / auth-profile files / env vars. Per-request, never cached. Whatever key OC sends in the request is the key forwarded upstream — robust against `openclaw.json` drift.
+
+  Together these restore the v2.x design principle: derive shape + key from the request itself, not from configuration that can drift. Verified live on the openclaw test droplet via Telegram (4 successful round-trip prompts, 2.6-2.8s latency).
+
 ## 4.3.1
 
 ### Patch Changes
