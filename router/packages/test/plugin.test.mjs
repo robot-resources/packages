@@ -916,3 +916,60 @@ describe('post-install message injection', () => {
     expect(() => plugin.register(api)).not.toThrow();
   });
 });
+
+// ── Recurring Heartbeat ──────────────────────────────────────────
+// Once-only plugin_register has no retry; a transient failure at OC boot
+// strands the install (silent fleet). Recurring router_heartbeat at 15min
+// guarantees a recovery window — verified on live droplet 2026-05-01.
+
+describe('register(api) — recurring heartbeat', () => {
+  let plugin;
+  let setIntervalSpy;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+    const mod = await import('../lib/plugin-core.js');
+    plugin = mod.default;
+  });
+
+  afterEach(() => {
+    setIntervalSpy.mockRestore();
+  });
+
+  it('schedules a recurring heartbeat on first register()', () => {
+    const api = {
+      config: {},
+      pluginConfig: {},
+      logger: { info: vi.fn() },
+      registerProvider: vi.fn(),
+      on: vi.fn(),
+    };
+
+    plugin.register(api);
+
+    const heartbeatCalls = setIntervalSpy.mock.calls.filter(
+      ([, ms]) => ms === 15 * 60 * 1_000,
+    );
+    expect(heartbeatCalls).toHaveLength(1);
+  });
+
+  it('schedules the heartbeat exactly once across multiple register() calls', () => {
+    const api = {
+      config: {},
+      pluginConfig: {},
+      logger: { info: vi.fn() },
+      registerProvider: vi.fn(),
+      on: vi.fn(),
+    };
+
+    plugin.register(api);
+    plugin.register(api);
+    plugin.register(api);
+
+    const heartbeatCalls = setIntervalSpy.mock.calls.filter(
+      ([, ms]) => ms === 15 * 60 * 1_000,
+    );
+    expect(heartbeatCalls).toHaveLength(1);
+  });
+});

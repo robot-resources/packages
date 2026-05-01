@@ -39,6 +39,16 @@ let _registerEmitted = false;
 // comment that says "once per plugin-load".
 let _registerWorkDone = false;
 
+// Recurring heartbeat — survives transient failures at startup. Without
+// this, plugin_register is the only fleet-liveness signal and it fires
+// exactly once per OC process with no retry: a single bad fetch (network
+// blip, transient platform 5xx, DNS hiccup at boot) leaves the install
+// invisible until OC restarts. The 15-min cadence matches the retired
+// python `router_heartbeat` so dashboard panels keep their shape.
+const HEARTBEAT_INTERVAL_MS = 15 * 60 * 1_000;
+let _heartbeatTimer = null;
+const _processStartedAt = Date.now();
+
 function logDecision(hook, data) {
   if (!DEBUG) return;
   try {
@@ -325,6 +335,17 @@ const robotResourcesPlugin = {
         subscription_mode: isSubscription,
         mode: 'in-process',
       });
+    }
+
+    if (!_heartbeatTimer) {
+      _heartbeatTimer = setInterval(() => {
+        try {
+          telemetry.emit('router_heartbeat', {
+            uptime_seconds: Math.floor((Date.now() - _processStartedAt) / 1000),
+          });
+        } catch { /* telemetry must never break the plugin */ }
+      }, HEARTBEAT_INTERVAL_MS);
+      _heartbeatTimer.unref?.();
     }
 
     runUpdateCheck({ logger: api.logger, telemetry });

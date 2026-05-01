@@ -1,5 +1,11 @@
 # @robot-resources/router
 
+## 4.3.0
+
+### Minor Changes
+
+- 04e95b1: Multi-lab dispatch in plugin: route requests to Anthropic, OpenAI, and Google upstream APIs based on the configured provider, instead of forwarding everything to api.anthropic.com. Includes agent-runtime integration test (PR #196).
+
 ## 4.2.0
 
 ### Minor Changes
