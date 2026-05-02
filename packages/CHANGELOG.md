@@ -1,5 +1,52 @@
 # robot-resources
 
+## 1.12.1
+
+### Patch Changes
+
+- 70159b0: feat(router,cli): standalone `npx @robot-resources/router` wizard (Phase 5)
+
+  Adds a `bin` entry to `@robot-resources/router` so users who only want routing (no scraper) can run `npx @robot-resources/router` and get a smaller install. Backed by a new `--scope=router-only` flag in the unified wizard, which skips the scraper MCP registration step on the OC path.
+
+  **The router bin** (`router/packages/router/bin/setup.js`) is a small spawn wrapper:
+
+  ```
+  npx --yes robot-resources --scope=router-only [user-args...]
+  ```
+
+  This delegates everything (signup, agent detection, shell-config writing, pip install) to the unified wizard via the new flag — zero duplication. Side benefit: any future wizard improvement automatically reaches both entry points.
+
+  **Why spawn instead of import:** the dependency arrow is `robot-resources` → `@robot-resources/router`. Reversing it would create a workspace cycle. Spawning sidesteps that without bundling the wizard code into the router package.
+
+  **The wizard's new `--scope` flag:**
+
+  - `scope=full` (default) — current behavior. Installs router + scraper.
+  - `scope=router-only` — skips the scraper MCP registration step in the OC branch. Non-OC paths are router-only by definition (Node shim + pip robot-resources both ship without scraper code), so they're untouched.
+
+  Tagged on `wizard_started.scope` so the funnel can segment by entry CLI in Supabase.
+
+  **Files:**
+
+  - `packages/cli/lib/wizard.js` — adds `scope` param to `runWizard`. Skips Step 2 (scraper) when `scope=router-only`. Tags telemetry.
+  - `packages/cli/bin/setup.js` — parses `--scope=...` arg.
+  - `router/packages/router/bin/setup.js` — NEW. ~30 lines.
+  - `router/packages/router/package.json` — adds `bin` entry + `bin/` to `files[]`.
+  - `packages/cli/test/wizard.test.mjs` — 4 new tests (skips scraper / preserves default / payload tag / default-payload).
+
+  **Test plan:**
+
+  - 238/238 CLI tests pass.
+  - Live verified: `node router/packages/router/bin/setup.js --uninstall` correctly delegates to `npx --yes robot-resources --scope=router-only --uninstall` (the spawn surface).
+
+  **What's NOT in this PR:**
+
+  - The router bin is unbundled; first run on a fresh machine fetches both `@robot-resources/router` and `robot-resources` via npx (npx caches both, so subsequent runs are fast).
+  - We could later inline the wizard into the router package to skip the second fetch — defer until usage signals warrant it.
+
+- Updated dependencies [73664c1]
+- Updated dependencies [70159b0]
+  - @robot-resources/router@4.4.0
+
 ## 1.12.0
 
 ### Minor Changes

@@ -1,5 +1,84 @@
 # @robot-resources/router
 
+## 4.4.0
+
+### Minor Changes
+
+- 70159b0: feat(router,cli): standalone `npx @robot-resources/router` wizard (Phase 5)
+
+  Adds a `bin` entry to `@robot-resources/router` so users who only want routing (no scraper) can run `npx @robot-resources/router` and get a smaller install. Backed by a new `--scope=router-only` flag in the unified wizard, which skips the scraper MCP registration step on the OC path.
+
+  **The router bin** (`router/packages/router/bin/setup.js`) is a small spawn wrapper:
+
+  ```
+  npx --yes robot-resources --scope=router-only [user-args...]
+  ```
+
+  This delegates everything (signup, agent detection, shell-config writing, pip install) to the unified wizard via the new flag — zero duplication. Side benefit: any future wizard improvement automatically reaches both entry points.
+
+  **Why spawn instead of import:** the dependency arrow is `robot-resources` → `@robot-resources/router`. Reversing it would create a workspace cycle. Spawning sidesteps that without bundling the wizard code into the router package.
+
+  **The wizard's new `--scope` flag:**
+
+  - `scope=full` (default) — current behavior. Installs router + scraper.
+  - `scope=router-only` — skips the scraper MCP registration step in the OC branch. Non-OC paths are router-only by definition (Node shim + pip robot-resources both ship without scraper code), so they're untouched.
+
+  Tagged on `wizard_started.scope` so the funnel can segment by entry CLI in Supabase.
+
+  **Files:**
+
+  - `packages/cli/lib/wizard.js` — adds `scope` param to `runWizard`. Skips Step 2 (scraper) when `scope=router-only`. Tags telemetry.
+  - `packages/cli/bin/setup.js` — parses `--scope=...` arg.
+  - `router/packages/router/bin/setup.js` — NEW. ~30 lines.
+  - `router/packages/router/package.json` — adds `bin` entry + `bin/` to `files[]`.
+  - `packages/cli/test/wizard.test.mjs` — 4 new tests (skips scraper / preserves default / payload tag / default-payload).
+
+  **Test plan:**
+
+  - 238/238 CLI tests pass.
+  - Live verified: `node router/packages/router/bin/setup.js --uninstall` correctly delegates to `npx --yes robot-resources --scope=router-only --uninstall` (the spawn surface).
+
+  **What's NOT in this PR:**
+
+  - The router bin is unbundled; first run on a fresh machine fetches both `@robot-resources/router` and `robot-resources` via npx (npx caches both, so subsequent runs are fast).
+  - We could later inline the wizard into the router package to skip the second fetch — defer until usage signals warrant it.
+
+### Patch Changes
+
+- 73664c1: feat(router,python): OpenAI + Google adapters in both languages (Phase 4)
+
+  Mechanical extension of Phase 1's pattern. Same `RR_AUTOATTACH=1` gate;
+  same in-process server; same telemetry.
+
+  **Node — `@robot-resources/router`** (this changeset):
+
+  - New `lib/adapters/openai-node.js` — env-var override of `OPENAI_BASE_URL`. The OpenAI SDK reads it natively (`openai/client.js:71`), same trick as Anthropic. `auto.cjs` sets it eagerly.
+  - New `lib/adapters/google-node.js` — Google's SDK doesn't honor a base-URL env var, so we monkey-patch `GoogleGenerativeAI.prototype.getGenerativeModel` at `Module._load` time. The user's API key continues to flow through unchanged.
+  - New `lib/adapters/_local-server-once.js` — singleton coordinator. All three adapters share one `startLocalServer` bind per process. Phase 1's anthropic adapter refactored to use it.
+  - `auto.cjs` now sets BOTH `ANTHROPIC_BASE_URL` and `OPENAI_BASE_URL` eagerly + loads all three adapters in parallel via `Promise.allSettled` (one failing doesn't block the others).
+
+  **Python — PyPI 0.3.0** (manual publish post-merge, mirrors Phase 2):
+
+  - New `_autoattach/openai_patch.py` — wraps `openai.resources.chat.completions.Completions.create` (sync + async). Routes via `/v1/route` cloud endpoint, swaps `model` in kwargs.
+  - New `_autoattach/google_patch.py` — wraps `google.generativeai.GenerativeModel.generate_content` (sync + async). Mutates `self.model_name` for the call duration so the SDK builds the right URL.
+  - `_autoattach/__init__.py` now loads all three patchers, each isolated in its own try/except — one failing adapter doesn't disable the others.
+  - pyproject.toml bumped to `0.3.0`.
+
+  **Test coverage** (all green):
+
+  - Router: 356 tests (15 new in `adapter-openai-google.test.mjs`; existing anthropic-node tests updated to reset the new singleton).
+  - Python: 46 tests (14 new across `test_openai_patch.py` + `test_google_patch.py`).
+
+  **Telemetry note:** `adapter_attached` events now also fire with `sdk: 'openai'` and `sdk: 'google'`. Same payload shape as Phase 1 — directly queryable in Supabase under the same `api_key_id` key.
+
+  **What's NOT in this PR:**
+
+  - `google.genai` (the new package; this targets the legacy `google-generativeai`).
+  - Wizard messaging changes for OpenAI/Google detection (Phase 3 already detects them as Node SDKs; the per-call routing just works once auto-attach is wired).
+  - Standalone router CLI (Phase 5).
+
+  **Manual PyPI publish required after this merges:** `cd python/robot-resources && rm -rf dist && python3 -m build && python3 -m twine upload dist/*`. Mirrors the Phase 2 publish flow.
+
 ## 4.3.3
 
 ### Patch Changes
