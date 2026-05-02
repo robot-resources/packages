@@ -1,5 +1,26 @@
 # robot-resources
 
+## 1.11.2
+
+### Patch Changes
+
+- 39d3dae: feat(cli): close non-OC funnel-completion telemetry holes + add `--uninstall`
+
+  Phase 0 of the universal-installer refactor. Two changes, both small.
+
+  **Telemetry holes.** The non-OC wizard had two silent-return paths that never emitted `wizard_path_chosen`:
+
+  1. `--non-interactive` with no `--for=<target>` printed the hint and returned. The May 1 cohort confirmed this — a JP user (non_interactive=true) signed up, hit `wizard_started`, then disappeared. Now emits `wizard_path_chosen` with `path: 'noninteractive_no_target'`.
+  2. Interactive prompt aborted via Ctrl-C / `ABORT_ERR` returned silently. The 3 RU users with `non_interactive=false` likely hit this (UA=`node` in non-TTY env makes `@inquirer/prompts.select` throw). Now emits `wizard_path_chosen` with `path: 'aborted'`.
+
+  The funnel `wizard_started` → `wizard_path_chosen` is now closed end-to-end. Both new paths share the existing event type so the Supabase funnel query stays single-event.
+
+  **`--uninstall` flag.** `npx robot-resources --uninstall` removes the OC plugin install side: the two plugin directories under `~/.openclaw/extensions/`, plus our entries from `openclaw.json` (`plugins.entries`, `plugins.allow`, `mcp.servers`). Idempotent and surgical — leaves other plugins / MCP servers untouched. `~/.robot-resources/config.json` is preserved by default so reinstalling reuses the same `api_key`. `--purge` also wipes the config dir.
+
+  Telemetry: emits `wizard_uninstalled` with `components_removed` so we get a churn signal.
+
+  This is the trust foundation before Phase 1 (in-process SDK adapters for non-OC Node + Python agents).
+
 ## 1.11.1
 
 ### Patch Changes
