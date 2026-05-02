@@ -1,5 +1,36 @@
 # @robot-resources/router
 
+## 4.3.3
+
+### Patch Changes
+
+- d536cf2: feat(router): Node `--require` auto-attach entry for Anthropic SDK (Phase 1, opt-in)
+
+  Phase 1 of the universal-installer refactor. Adds a `./auto` subpath export that, when loaded via `NODE_OPTIONS="--require @robot-resources/router/auto"`, auto-routes the agent's Anthropic SDK calls through Robot Resources.
+
+  **Mechanism (no monkey-patching):** The Anthropic SDK constructor reads `ANTHROPIC_BASE_URL` directly (verified in `@anthropic-ai/sdk` `client.js:50`). `auto.cjs` sets that env var to `http://127.0.0.1:18790/anthropic` BEFORE user code runs and then starts an in-process routing server (reuses `lib/local-server.js` from the OC plugin path — already standalone). When the user creates `new Anthropic()`, every method routes through the local server: classifier picks the cheapest in-lab model → forwards to api.anthropic.com with the user's existing key. Same lifecycle as the OC plugin: lives and dies with the agent's process. No daemon, no service registration.
+
+  **Opt-in gate:** The wizard does NOT yet write `NODE_OPTIONS` into shell config. Users explicitly enable Phase 1 via `RR_AUTOATTACH=1` until the bundler-fixture matrix proves the patch survives esbuild / Vite / ESM-only / pnpm setups. Phase 3 lifts this gate.
+
+  **Safety properties:**
+
+  - Singleton guard — multiple loads (worker threads, IPC) early-return.
+  - Respects pre-existing `ANTHROPIC_BASE_URL` — never clobbers a user override.
+  - Falls back to OS-chosen port + rewrites the env var if 18790 is taken (e.g. an OC plugin already running on the same machine).
+  - Errors are swallowed by default; `RR_AUTOATTACH_DEBUG=1` surfaces them.
+  - `RR_AUTOATTACH_DRY_RUN=1` skips the server bind for tests.
+
+  **New telemetry:** `adapter_attached` — fired once per process at attach time. Payload: `{sdk, sdk_version, attached, bound_port, fallback_port, providers_detected, language: 'node', module_system: 'cjs'}`. Plus a `reason` field (`local_server_bind_failed` / `local_server_throw`) on failure. This is the first non-OC adoption signal in Supabase.
+
+  **Files added:**
+
+  - `auto.cjs` — the `--require` entry. CJS so it works with Node 18's `--require` (ESM-only `--import` is Node 20.6+).
+  - `lib/adapters/_attach.js` — telemetry + provider-detection helpers.
+  - `lib/adapters/anthropic-node.js` — `attach()` boots the local server + emits telemetry.
+  - `package.json` — adds `"./auto": "./auto.cjs"` to `exports`, adds `auto.cjs` to `files[]`.
+
+  **Tests:** 16 new (8 surface tests for the package export + spawn-child env-var assertions; 8 adapter unit tests covering primary-bind / fallback-bind / both failure modes / provider detection). 349/349 router tests pass.
+
 ## 4.3.2
 
 ### Patch Changes
