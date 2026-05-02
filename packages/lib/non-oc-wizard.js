@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { select } from '@inquirer/prompts';
-import { isClaudeCodeInstalled, isCursorInstalled } from './detect.js';
+import { isClaudeCodeInstalled, isCursorInstalled, detectAgentRuntime } from './detect.js';
 import { configureClaudeCode, configureCursor } from './tool-config.js';
 import { header, info, success, warn, blank } from './ui.js';
 import { readConfig } from './config.mjs';
@@ -223,6 +223,29 @@ export async function runNonOcWizard({ nonInteractive = false, target = null } =
   }
 
   if (nonInteractive) {
+    // Phase 3.5: when project shape is unambiguous (cwd has a package.json
+    // OR a Python project file), auto-install the matching shim instead of
+    // bailing with a hint. CI/agents running `npx robot-resources` from
+    // their repo are exactly this case — making them pass `--for=` is
+    // friction we don't need.
+    //
+    // The Phase 3 noninteractive_no_target path is preserved for the case
+    // where detection finds nothing (truly empty cwd, generic shell run).
+    const runtime = detectAgentRuntime();
+    let autoTarget = null;
+    if (runtime.kind === 'node' || runtime.kind === 'both') autoTarget = 'js';
+    else if (runtime.kind === 'python') autoTarget = 'python';
+
+    if (autoTarget) {
+      // Brief context so the install step doesn't feel sudden.
+      info(`Detected a ${autoTarget === 'js' ? 'Node' : 'Python'} project — installing the matching shim automatically.`);
+      info('  Pass --for=<other> to override, or --uninstall to remove later.');
+      blank();
+      await runPath(autoTarget);
+      await emitPathChosen(autoTarget);
+      return;
+    }
+
     info('Robot Resources requires OpenClaw, which we did not detect on this machine.');
     info('To bypass this prompt in CI / non-TTY contexts, re-run with --for=<target>:');
     info('  npx robot-resources --for=langchain      # JS/TS agent');

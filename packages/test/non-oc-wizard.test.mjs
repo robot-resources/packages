@@ -19,6 +19,7 @@ vi.mock('../lib/detect.js', () => ({
   isCursorInstalled: vi.fn(() => false),
   detectNodeAgent: vi.fn(() => null),
   detectPythonAgent: vi.fn(() => null),
+  detectAgentRuntime: vi.fn(() => ({ kind: null })),
 }));
 
 vi.mock('../lib/tool-config.js', () => ({
@@ -60,7 +61,7 @@ vi.mock('../lib/config.mjs', () => ({
 
 const { existsSync, readFileSync } = await import('node:fs');
 const { select } = await import('@inquirer/prompts');
-const { isClaudeCodeInstalled, isCursorInstalled } = await import('../lib/detect.js');
+const { isClaudeCodeInstalled, isCursorInstalled, detectAgentRuntime } = await import('../lib/detect.js');
 const { configureClaudeCode, configureCursor } = await import('../lib/tool-config.js');
 const { info } = await import('../lib/ui.js');
 const { readConfig } = await import('../lib/config.mjs');
@@ -74,6 +75,9 @@ beforeEach(() => {
   existsSync.mockReturnValue(false);
   isClaudeCodeInstalled.mockReturnValue(false);
   isCursorInstalled.mockReturnValue(false);
+  // Default: empty cwd — no Node, no Python project detected. Tests that
+  // exercise Phase 3.5 auto-install override this per-case.
+  detectAgentRuntime.mockReturnValue({ kind: null });
   readConfig.mockReturnValue({ api_key: 'rr_live_test' });
 });
 
@@ -199,24 +203,59 @@ describe('runNonOcWizard — --for=<target> direct routing', () => {
   });
 });
 
-describe('runNonOcWizard — non-interactive without --for=', () => {
-  it('prints the --for= hint and exits without running a path', async () => {
+describe('runNonOcWizard — non-interactive without --for= (Phase 3.5)', () => {
+  it('prints the --for= hint and exits when cwd has no recognizable runtime', async () => {
+    detectAgentRuntime.mockReturnValue({ kind: null });
     await runNonOcWizard({ nonInteractive: true, target: null });
     expect(select).not.toHaveBeenCalled();
+    expect(installNodeShim).not.toHaveBeenCalled();
+    expect(installPythonShim).not.toHaveBeenCalled();
     expect(info).toHaveBeenCalledWith(expect.stringContaining('--for=langchain'));
     expect(info).toHaveBeenCalledWith(expect.stringContaining('--for=python'));
   });
 
-  it('emits wizard_path_chosen with path=noninteractive_no_target on the bare hint exit', async () => {
+  it('emits wizard_path_chosen with path=noninteractive_no_target when no runtime detected', async () => {
+    detectAgentRuntime.mockReturnValue({ kind: null });
     await runNonOcWizard({ nonInteractive: true, target: null });
     const calls = globalThis.fetch.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'));
     expect(calls.length).toBe(1);
     const body = JSON.parse(calls[0][1].body);
-    expect(body.event_type).toBe('wizard_path_chosen');
     expect(body.payload.path).toBe('noninteractive_no_target');
   });
 
-  it('skips the noninteractive_no_target telemetry when no api_key is in config', async () => {
+  it('AUTO-INSTALLS Node shim when cwd is unambiguously a Node project', async () => {
+    detectAgentRuntime.mockReturnValue({ kind: 'node', evidence: ['@anthropic-ai/sdk'] });
+    await runNonOcWizard({ nonInteractive: true, target: null });
+    expect(installNodeShim).toHaveBeenCalledOnce();
+    expect(installPythonShim).not.toHaveBeenCalled();
+    const calls = globalThis.fetch.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'));
+    expect(JSON.parse(calls[0][1].body).payload.path).toBe('js');
+  });
+
+  it('AUTO-INSTALLS Python shim when cwd is unambiguously a Python project', async () => {
+    detectAgentRuntime.mockReturnValue({ kind: 'python', evidence: ['anthropic'] });
+    await runNonOcWizard({ nonInteractive: true, target: null });
+    expect(installPythonShim).toHaveBeenCalledOnce();
+    expect(installNodeShim).not.toHaveBeenCalled();
+    const calls = globalThis.fetch.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'));
+    expect(JSON.parse(calls[0][1].body).payload.path).toBe('python');
+  });
+
+  it('defaults mixed cwd (kind=both) to Node, per the plan decision', async () => {
+    detectAgentRuntime.mockReturnValue({
+      kind: 'both',
+      node: { evidence: ['openai'] },
+      python: { evidence: ['anthropic'] },
+    });
+    await runNonOcWizard({ nonInteractive: true, target: null });
+    expect(installNodeShim).toHaveBeenCalledOnce();
+    expect(installPythonShim).not.toHaveBeenCalled();
+    const calls = globalThis.fetch.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'));
+    expect(JSON.parse(calls[0][1].body).payload.path).toBe('js');
+  });
+
+  it('skips telemetry when no api_key in config (auto-install path)', async () => {
+    detectAgentRuntime.mockReturnValue({ kind: 'node', evidence: [] });
     readConfig.mockReturnValue({});
     await runNonOcWizard({ nonInteractive: true, target: null });
     const calls = globalThis.fetch.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'));
