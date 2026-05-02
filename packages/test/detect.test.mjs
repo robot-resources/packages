@@ -17,8 +17,16 @@ vi.mock('node:os', () => ({
 const { execSync, execFileSync } = await import('node:child_process');
 const { existsSync, readFileSync } = await import('node:fs');
 const os = await import('node:os');
-const { getOpenClawAuthMode, isOpenClawPluginInstalled, isScraperOcPluginInstalled, isClaudeCodeInstalled, isCursorInstalled } =
-  await import('../lib/detect.js');
+const {
+  getOpenClawAuthMode,
+  isOpenClawPluginInstalled,
+  isScraperOcPluginInstalled,
+  isClaudeCodeInstalled,
+  isCursorInstalled,
+  detectNodeAgent,
+  detectPythonAgent,
+  detectAgentRuntime,
+} = await import('../lib/detect.js');
 
 describe('detect', () => {
   beforeEach(() => {
@@ -239,6 +247,132 @@ describe('detect', () => {
     it('returns false when ~/.cursor/ does not exist', () => {
       existsSync.mockReturnValue(false);
       expect(isCursorInstalled()).toBe(false);
+    });
+  });
+
+  // ── detectNodeAgent ───────────────────────────────────────
+
+  describe('detectNodeAgent', () => {
+    it('returns null when no package.json', () => {
+      existsSync.mockReturnValue(false);
+      expect(detectNodeAgent('/proj')).toBeNull();
+    });
+
+    it('returns evidence for @anthropic-ai/sdk dep', () => {
+      existsSync.mockImplementation((p) => String(p).endsWith('package.json'));
+      readFileSync.mockReturnValue(JSON.stringify({
+        dependencies: { '@anthropic-ai/sdk': '^0.30' },
+      }));
+      const result = detectNodeAgent('/proj');
+      expect(result.evidence).toContain('@anthropic-ai/sdk');
+    });
+
+    it('returns evidence for langchain + openai (multiple matches)', () => {
+      existsSync.mockImplementation((p) => String(p).endsWith('package.json'));
+      readFileSync.mockReturnValue(JSON.stringify({
+        dependencies: { langchain: '^0.1', openai: '^4.0' },
+      }));
+      const result = detectNodeAgent('/proj');
+      expect(result.evidence).toEqual(expect.arrayContaining(['langchain', 'openai']));
+    });
+
+    it('returns empty evidence for generic package.json (no LLM SDK)', () => {
+      existsSync.mockImplementation((p) => String(p).endsWith('package.json'));
+      readFileSync.mockReturnValue(JSON.stringify({
+        dependencies: { express: '^4.0' },
+      }));
+      const result = detectNodeAgent('/proj');
+      expect(result.evidence).toEqual([]);
+    });
+
+    it('also scans devDependencies', () => {
+      existsSync.mockImplementation((p) => String(p).endsWith('package.json'));
+      readFileSync.mockReturnValue(JSON.stringify({
+        devDependencies: { '@google/generative-ai': '^1.0' },
+      }));
+      const result = detectNodeAgent('/proj');
+      expect(result.evidence).toContain('@google/generative-ai');
+    });
+
+    it('returns empty evidence on malformed package.json (still claims Node)', () => {
+      existsSync.mockImplementation((p) => String(p).endsWith('package.json'));
+      readFileSync.mockReturnValue('{not valid json');
+      const result = detectNodeAgent('/proj');
+      expect(result).toEqual({ evidence: [] });
+    });
+  });
+
+  // ── detectPythonAgent ──────────────────────────────────────
+
+  describe('detectPythonAgent', () => {
+    it('returns null when no requirements.txt or pyproject.toml', () => {
+      existsSync.mockReturnValue(false);
+      expect(detectPythonAgent('/proj')).toBeNull();
+    });
+
+    it('detects anthropic in requirements.txt', () => {
+      existsSync.mockImplementation((p) => String(p).endsWith('requirements.txt'));
+      readFileSync.mockReturnValue('anthropic==0.30.0\nhttpx>=0.25\n');
+      const result = detectPythonAgent('/proj');
+      expect(result.evidence).toContain('anthropic');
+    });
+
+    it('detects langchain-anthropic + langgraph in pyproject.toml dependencies', () => {
+      existsSync.mockImplementation((p) => String(p).endsWith('pyproject.toml'));
+      readFileSync.mockReturnValue(`
+[project]
+dependencies = [
+  "langchain-anthropic>=0.1.0",
+  "langgraph>=0.0.40",
+]
+`);
+      const result = detectPythonAgent('/proj');
+      expect(result.evidence).toEqual(expect.arrayContaining(['langchain-anthropic', 'langgraph']));
+    });
+
+    it('returns empty evidence when neither file mentions known SDK', () => {
+      existsSync.mockImplementation((p) => String(p).endsWith('requirements.txt'));
+      readFileSync.mockReturnValue('flask==3.0.0\n');
+      const result = detectPythonAgent('/proj');
+      expect(result.evidence).toEqual([]);
+    });
+  });
+
+  // ── detectAgentRuntime ────────────────────────────────────
+
+  describe('detectAgentRuntime', () => {
+    it('returns kind=node when only package.json exists', () => {
+      existsSync.mockImplementation((p) => String(p).endsWith('package.json'));
+      readFileSync.mockReturnValue('{"dependencies":{"openai":"^4"}}');
+      const result = detectAgentRuntime('/proj');
+      expect(result.kind).toBe('node');
+      expect(result.evidence).toContain('openai');
+    });
+
+    it('returns kind=python when only requirements.txt exists', () => {
+      existsSync.mockImplementation((p) => String(p).endsWith('requirements.txt'));
+      readFileSync.mockReturnValue('anthropic==0.30.0\n');
+      const result = detectAgentRuntime('/proj');
+      expect(result.kind).toBe('python');
+    });
+
+    it('returns kind=both when package.json AND pyproject.toml exist', () => {
+      existsSync.mockImplementation((p) =>
+        String(p).endsWith('package.json') || String(p).endsWith('pyproject.toml'),
+      );
+      readFileSync.mockImplementation((p) => {
+        if (String(p).endsWith('package.json')) return '{"dependencies":{"openai":"^4"}}';
+        return 'dependencies = ["anthropic>=0.30"]';
+      });
+      const result = detectAgentRuntime('/proj');
+      expect(result.kind).toBe('both');
+      expect(result.node.evidence).toContain('openai');
+      expect(result.python.evidence).toContain('anthropic');
+    });
+
+    it('returns kind=null when nothing matches', () => {
+      existsSync.mockReturnValue(false);
+      expect(detectAgentRuntime('/proj').kind).toBeNull();
     });
   });
 });

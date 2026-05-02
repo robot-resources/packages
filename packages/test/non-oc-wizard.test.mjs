@@ -17,11 +17,33 @@ vi.mock('@inquirer/prompts', () => ({
 vi.mock('../lib/detect.js', () => ({
   isClaudeCodeInstalled: vi.fn(() => false),
   isCursorInstalled: vi.fn(() => false),
+  detectNodeAgent: vi.fn(() => null),
+  detectPythonAgent: vi.fn(() => null),
 }));
 
 vi.mock('../lib/tool-config.js', () => ({
   configureClaudeCode: vi.fn(() => ({ action: 'configured' })),
   configureCursor: vi.fn(() => ({ action: 'configured' })),
+}));
+
+vi.mock('../lib/install-node-shim.js', () => ({
+  installNodeShim: vi.fn(() => Promise.resolve({
+    ok: true,
+    written: ['/mock/home/.zshrc'],
+    errors: [],
+    message: 'Installed NODE_OPTIONS auto-attach in 1 shell file(s).',
+  })),
+}));
+
+vi.mock('../lib/install-python-shim.js', () => ({
+  installPythonShim: vi.fn(() => Promise.resolve({
+    ok: true,
+    venv: { python: '/mock/.venv/bin/python', kind: 'cwd-venv', confidence: 'high' },
+    pythonVersion: '3.11.9',
+    sdks: [],
+    pipResult: { ok: true, code: 0, stderr: '' },
+    message: 'Installed robot-resources into cwd-venv venv',
+  })),
 }));
 
 vi.mock('../lib/ui.js', () => ({
@@ -42,6 +64,8 @@ const { isClaudeCodeInstalled, isCursorInstalled } = await import('../lib/detect
 const { configureClaudeCode, configureCursor } = await import('../lib/tool-config.js');
 const { info } = await import('../lib/ui.js');
 const { readConfig } = await import('../lib/config.mjs');
+const { installNodeShim } = await import('../lib/install-node-shim.js');
+const { installPythonShim } = await import('../lib/install-python-shim.js');
 const { runNonOcWizard, detectDefaultPath } = await import('../lib/non-oc-wizard.js');
 
 beforeEach(() => {
@@ -92,25 +116,46 @@ describe('detectDefaultPath', () => {
 });
 
 describe('runNonOcWizard — --for=<target> direct routing', () => {
-  it('runs the JS path when target=js', async () => {
+  it('runs the JS path when target=js (calls installNodeShim, no select prompt)', async () => {
     await runNonOcWizard({ nonInteractive: true, target: 'js' });
     expect(select).not.toHaveBeenCalled();
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('npm install @robot-resources/router'));
+    expect(installNodeShim).toHaveBeenCalledOnce();
   });
 
   it('runs the JS path when target=langchain (alias)', async () => {
     await runNonOcWizard({ nonInteractive: true, target: 'langchain' });
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('npm install @robot-resources/router'));
+    expect(installNodeShim).toHaveBeenCalledOnce();
   });
 
-  it('runs the Python path when target=python (pip install + SDK + httpx fallback hint)', async () => {
+  it('runs the Python path when target=python (calls installPythonShim)', async () => {
     await runNonOcWizard({ nonInteractive: true, target: 'python' });
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('pip install robot-resources'));
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('from robot_resources.router import route'));
+    expect(installPythonShim).toHaveBeenCalledOnce();
+    expect(installNodeShim).not.toHaveBeenCalled();
     // Must NOT recommend the deprecated robot-resources-router PyPI name.
     const calls = info.mock.calls.map((c) => c[0]).join('\n');
     expect(calls).not.toContain('pip install robot-resources-router');
     expect(calls).not.toContain('rr_router');
+  });
+
+  it('falls back to printed instructions when installNodeShim returns ok=false', async () => {
+    installNodeShim.mockResolvedValueOnce({
+      ok: false,
+      message: 'Could not write to any shell rc file. Errors: EACCES',
+    });
+    await runNonOcWizard({ nonInteractive: true, target: 'js' });
+    const calls = info.mock.calls.map((c) => c[0]).join('\n');
+    expect(calls).toContain('--require @robot-resources/router/auto');
+  });
+
+  it('falls back to printed instructions when installPythonShim returns ok=false', async () => {
+    installPythonShim.mockResolvedValueOnce({
+      ok: false,
+      reason: 'no_venv_found',
+      message: 'No active venv or ./.venv detected.',
+    });
+    await runNonOcWizard({ nonInteractive: true, target: 'python' });
+    const calls = info.mock.calls.map((c) => c[0]).join('\n');
+    expect(calls).toContain('pip install --upgrade robot-resources');
   });
 
   it('runs the MCP path when target=cursor and Cursor is installed', async () => {
@@ -184,7 +229,7 @@ describe('runNonOcWizard — interactive menu', () => {
     select.mockResolvedValue('python');
     await runNonOcWizard({ nonInteractive: false, target: null });
     expect(select).toHaveBeenCalledOnce();
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('pip install robot-resources'));
+    expect(installPythonShim).toHaveBeenCalledOnce();
   });
 
   it('preselects "js" when cwd looks like a JS project', async () => {

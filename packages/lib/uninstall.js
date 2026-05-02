@@ -2,21 +2,24 @@ import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { stripJson5 } from './json5.js';
+import { removeShellLine } from './shell-config.js';
+import { detectVenv } from './venv-detect.js';
+import { spawnSync } from 'node:child_process';
 
 /**
  * Single source of truth for `npx robot-resources --uninstall`.
  *
- * Reverses the install actions in tool-config.js: removes the router and
- * scraper OC plugin directories, deletes their entries from openclaw.json
- * (plugins.entries + plugins.allow + mcp.servers).
- *
- * Phase 0 scope is OC-only. Phase 3 will extend this with shell-config
- * removal (NODE_OPTIONS line) and `pip uninstall robot-resources` for the
- * Node and Python shim install paths.
+ * Reverses every install path the wizard might have taken:
+ *   1. OC plugin directories under ~/.openclaw/extensions/ (Phase 0)
+ *   2. Our entries in openclaw.json (plugins.entries + plugins.allow +
+ *      mcp.servers) (Phase 0)
+ *   3. NODE_OPTIONS marker block in shell rc files (Phase 3 — Node shim)
+ *   4. `robot-resources` PyPI package in the resolved venv (Phase 3 —
+ *      Python shim)
+ *   5. With --purge: ~/.robot-resources/ config dir (api_key + claim_url)
  *
  * `~/.robot-resources/config.json` is preserved by default so a subsequent
  * re-install reuses the same api_key (and the user's claim_url stays valid).
- * Pass { purge: true } to wipe it as well.
  *
  * Returns { components_removed: string[], errors: { component, message }[] }
  * for telemetry. Failure to remove one component never aborts the others —
@@ -83,7 +86,49 @@ export function runUninstall({ purge = false } = {}) {
     }
   }
 
-  // 3. Optionally wipe ~/.robot-resources/config.json (and any siblings)
+  // 3. Shell config — remove the NODE_OPTIONS marker block from any rc
+  //    files Phase 3's wizard wrote to. Idempotent: no-op if not present.
+  try {
+    const result = removeShellLine();
+    if (result.removed.length > 0) {
+      components_removed.push('shell_config_node_options');
+    }
+    for (const e of result.errors) {
+      errors.push({ component: 'shell_config_node_options', message: `${e.path}: ${e.message}` });
+    }
+  } catch (err) {
+    errors.push({ component: 'shell_config_node_options', message: err.message });
+  }
+
+  // 4. Python shim — `pip uninstall -y robot-resources` against the resolved
+  //    venv. Skip silently if no venv detected (the user may have installed
+  //    via the wizard but already deleted the venv themselves).
+  try {
+    const venv = detectVenv();
+    if (venv.python) {
+      const result = spawnSync(venv.python, ['-m', 'pip', 'uninstall', '-y', 'robot-resources'], {
+        encoding: 'utf-8',
+        timeout: 60_000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      // pip exits 0 if removed, non-zero if package wasn't installed (also acceptable)
+      if (result.status === 0) {
+        components_removed.push('pip_robot_resources');
+      } else if (result.stderr && /not installed|skipping/i.test(result.stderr)) {
+        // Already gone — count as success silently.
+      } else if (result.status !== null) {
+        // Some other failure; record but don't abort
+        errors.push({
+          component: 'pip_robot_resources',
+          message: `pip exit ${result.status}: ${(result.stderr || '').slice(-200)}`,
+        });
+      }
+    }
+  } catch (err) {
+    errors.push({ component: 'pip_robot_resources', message: err.message });
+  }
+
+  // 5. Optionally wipe ~/.robot-resources/config.json (and any siblings)
   if (purge) {
     const rrDir = join(homedir(), '.robot-resources');
     if (existsSync(rrDir)) {

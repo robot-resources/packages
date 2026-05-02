@@ -5,6 +5,8 @@ import { isClaudeCodeInstalled, isCursorInstalled } from './detect.js';
 import { configureClaudeCode, configureCursor } from './tool-config.js';
 import { header, info, success, warn, blank } from './ui.js';
 import { readConfig } from './config.mjs';
+import { installNodeShim } from './install-node-shim.js';
+import { installPythonShim } from './install-python-shim.js';
 
 const PLATFORM_URL = process.env.RR_PLATFORM_URL || 'https://api.robotresources.ai';
 
@@ -87,38 +89,61 @@ async function emitPathChosen(path) {
   }
 }
 
-function showJsPath() {
+async function showJsPath() {
   blank();
   success('JS/TS integration');
   blank();
-  info('Install:');
-  info('  npm install @robot-resources/router');
+
+  const result = await installNodeShim();
+  if (result.ok) {
+    if (result.already) {
+      info(result.message);
+    } else {
+      success(result.message);
+      for (const path of result.written ?? []) {
+        info(`  • ${path}`);
+      }
+    }
+    blank();
+    info('Once your shell picks up the new NODE_OPTIONS, every Node agent on');
+    info('this machine routes Anthropic SDK calls through Robot Resources.');
+    info('Open a new terminal — or run:  source ~/.zshrc   (or your shell rc)');
+  } else {
+    warn(result.message);
+    blank();
+    info('Manual install (paste into ~/.zshrc or ~/.bashrc):');
+    info('  export NODE_OPTIONS="${NODE_OPTIONS:-} --require @robot-resources/router/auto"');
+  }
   blank();
-  info('Use:');
-  info('  import { routePrompt } from \'@robot-resources/router/routing\';');
-  info('  const decision = routePrompt(\'write a python function\');');
-  info('  console.log(decision.selected_model); // e.g. \'claude-haiku-4-5\'');
-  blank();
-  info('Full docs: https://robotresources.ai/docs/langchain');
+  info('Docs: https://robotresources.ai/docs/langchain');
   blank();
 }
 
-function showPythonPath() {
+async function showPythonPath() {
   blank();
   success('Python integration');
   blank();
-  info('Install:');
-  info('  pip install robot-resources');
+
+  const result = await installPythonShim();
+  if (result.ok) {
+    success(result.message);
+    if (result.sdks?.length) {
+      info(`  Detected SDKs: ${result.sdks.join(', ')}`);
+    }
+    blank();
+    info('Set RR_AUTOATTACH=1 in your shell, then run your Python agent.');
+    info('Every anthropic.Anthropic() instance routes through Robot Resources.');
+    info('  echo \'export RR_AUTOATTACH=1\' >> ~/.zshrc   # or your shell rc');
+  } else {
+    warn(result.message);
+    blank();
+    info('Manual install (run inside your venv):');
+    info('  pip install --upgrade robot-resources');
+    info('Then set:');
+    info('  export RR_AUTOATTACH=1');
+  }
   blank();
-  info('Use:');
-  info('  from robot_resources.router import route');
-  info('  decision = route(\'write a python function\')');
-  info('  print(decision[\'selected_model\'])  # e.g. \'claude-haiku-4-5\'');
-  blank();
-  info('Prefer no SDK? POST directly to https://api.robotresources.ai/v1/route');
-  info('with httpx / requests / any HTTP client. See docs.');
-  blank();
-  info('Full docs: https://robotresources.ai/docs/crewai');
+  info('Docs: https://robotresources.ai/docs/crewai');
   blank();
 }
 
@@ -171,10 +196,10 @@ function showInstallOcPath() {
   blank();
 }
 
-function runPath(path) {
+async function runPath(path) {
   switch (path) {
-    case 'js': showJsPath(); break;
-    case 'python': showPythonPath(); break;
+    case 'js': await showJsPath(); break;
+    case 'python': await showPythonPath(); break;
     case 'mcp': showMcpPath(); break;
     case 'docs': showDocsPath(); break;
     case 'install-oc': showInstallOcPath(); break;
@@ -192,7 +217,7 @@ export async function runNonOcWizard({ nonInteractive = false, target = null } =
   const normalized = normalizeTarget(target);
 
   if (normalized) {
-    runPath(normalized);
+    await runPath(normalized);
     await emitPathChosen(normalized);
     return;
   }
@@ -242,6 +267,6 @@ export async function runNonOcWizard({ nonInteractive = false, target = null } =
     throw err;
   }
 
-  runPath(chosen);
+  await runPath(chosen);
   await emitPathChosen(chosen);
 }

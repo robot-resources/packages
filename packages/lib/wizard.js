@@ -142,6 +142,11 @@ export async function runWizard({ nonInteractive = false, target = null } = {}) 
             auth_method: results.authMethod,
             non_interactive: nonInteractive,
             openclaw_detected: openclawDetected,
+            // Phase 3: tags which install branch the wizard is about to take.
+            // 'oc' for the OpenClaw path, 'non-oc' covers everything the
+            // non-OC wizard handles (Node shim, Python shim, MCP, docs).
+            // Finer per-path attribution still comes from wizard_path_chosen.
+            entry: openclawDetected ? 'oc' : 'non-oc',
           },
         }),
         signal: AbortSignal.timeout(5_000),

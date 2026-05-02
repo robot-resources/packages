@@ -125,3 +125,127 @@ export function isClaudeCodeInstalled() {
 export function isCursorInstalled() {
   return existsSync(join(homedir(), '.cursor'));
 }
+
+// ── Agent-runtime detection (Phase 3) ─────────────────────────────────────
+//
+// Used by the non-OC wizard to pick which shim to install: a NODE_OPTIONS
+// shell line for Node agents, or `pip install robot-resources` for Python.
+// Returns { kind: 'node'|'python'|null, evidence: string[] } so the wizard
+// can show the user WHY we picked a path (debuggable + builds trust).
+//
+// "Evidence" is the dep markers we found, in priority order. Empty string
+// means a generic project (e.g. just package.json, no LLM SDK deps yet) —
+// still picks the language but with low confidence.
+
+const NODE_AGENT_DEPS = [
+  '@anthropic-ai/sdk',
+  'openai',
+  '@google/generative-ai',
+  '@google-ai/generativelanguage',
+  'langchain',
+  '@langchain/core',
+  '@langchain/anthropic',
+  '@langchain/openai',
+  '@langchain/google-genai',
+  '@langchain/langgraph',
+  '@mastra/core',
+  'crewai-js',
+  'llamaindex',
+  'ai', // Vercel AI SDK
+];
+
+const PYTHON_AGENT_DEPS = [
+  'anthropic',
+  'openai',
+  'google-generativeai',
+  'langchain',
+  'langchain-anthropic',
+  'langchain-openai',
+  'langchain-google-genai',
+  'langgraph',
+  'crewai',
+  'llama-index',
+  'llama_index',
+];
+
+/**
+ * Inspect cwd for evidence of a Node agent project. Returns null if no
+ * package.json, or `{ evidence: [...] }` describing matched dep markers
+ * (empty list means "Node project but no LLM-SDK deps detected" — generic).
+ */
+export function detectNodeAgent(cwd = process.cwd()) {
+  const pkgPath = join(cwd, 'package.json');
+  if (!existsSync(pkgPath)) return null;
+
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+    const allDeps = {
+      ...(pkg.dependencies ?? {}),
+      ...(pkg.devDependencies ?? {}),
+      ...(pkg.peerDependencies ?? {}),
+    };
+    const evidence = NODE_AGENT_DEPS.filter(
+      (d) => Object.prototype.hasOwnProperty.call(allDeps, d),
+    );
+    return { evidence };
+  } catch {
+    // package.json unreadable but exists — call it Node, no evidence
+    return { evidence: [] };
+  }
+}
+
+/**
+ * Inspect cwd for evidence of a Python agent project. Looks at
+ * requirements.txt + pyproject.toml. Returns null if neither exists, or
+ * `{ evidence: [...] }`. Empty evidence still resolves to Python — many
+ * agent projects use ad-hoc deps not in our markers list.
+ */
+export function detectPythonAgent(cwd = process.cwd()) {
+  const reqPath = join(cwd, 'requirements.txt');
+  const pyProjPath = join(cwd, 'pyproject.toml');
+  const hasReq = existsSync(reqPath);
+  const hasPy = existsSync(pyProjPath);
+  if (!hasReq && !hasPy) return null;
+
+  const text = [
+    hasReq ? safeRead(reqPath) : '',
+    hasPy ? safeRead(pyProjPath) : '',
+  ].join('\n').toLowerCase();
+
+  const evidence = PYTHON_AGENT_DEPS.filter((d) => {
+    // Match `dep`, `dep==`, `dep>=`, `dep[extras]`, or `"dep"`/`'dep'` in
+    // pyproject's dependencies array. Word-boundary on the left, anything
+    // version-ish on the right.
+    const escaped = d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(^|[\\s"'\\[])${escaped}(\\s|[<>=!~\\["',]|$)`, 'm');
+    return re.test(text);
+  });
+
+  return { evidence };
+}
+
+function safeRead(path) {
+  try { return readFileSync(path, 'utf-8'); } catch { return ''; }
+}
+
+/**
+ * Decide which shim to install when OpenClaw is NOT detected. Picks Node OR
+ * Python based on cwd shape. When BOTH are present (full-stack monorepo
+ * with package.json AND pyproject.toml) the caller is responsible for
+ * resolving the ambiguity (interactively, or default to JS in --yes mode
+ * per the team decision in the plan).
+ *
+ * Returns one of:
+ *   { kind: 'node',   evidence: [...] }
+ *   { kind: 'python', evidence: [...] }
+ *   { kind: 'both',   node: {...}, python: {...} }
+ *   { kind: null }     — unknown project shape, no clear path
+ */
+export function detectAgentRuntime(cwd = process.cwd()) {
+  const node = detectNodeAgent(cwd);
+  const python = detectPythonAgent(cwd);
+  if (node && python) return { kind: 'both', node, python };
+  if (node) return { kind: 'node', evidence: node.evidence };
+  if (python) return { kind: 'python', evidence: python.evidence };
+  return { kind: null };
+}
