@@ -1,5 +1,17 @@
 # robot-resources
 
+## 1.11.1
+
+### Patch Changes
+
+- fd2e601: fix(cli): provision api_key + emit wizard_started for non-OpenClaw wizard runs
+
+  The wizard returned into the non-OC branch before Step 0 (signup) and the `wizard_started` emit ever executed, leaving every non-OpenClaw install invisible to telemetry — no `api_keys` row, no `agent_signup_meta`, no `wizard_started`. The non-OC wizard's existing `wizard_path_chosen` event was dead code too, since it bails on missing api_key. Past 14 days: 1,339 npm downloads, 3 `agent_signup_meta` events.
+
+  Hoist signup + `wizard_started` above the OC-detect branch so both paths funnel through them. Tag the `wizard_started` payload with `openclaw_detected` (matching the `install_complete` payload convention) so OC vs non-OC funnels can be segmented from a single event type. The non-OC wizard's `wizard_path_chosen` starts firing automatically as a side effect.
+
+  Product behavior is unchanged for OpenClaw users; the non-OC path's UX is unchanged. This is a measurement fix.
+
 ## 1.11.0
 
 ### Minor Changes

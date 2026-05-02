@@ -8,6 +8,7 @@ import { configureToolRouting, registerScraperMcp, restartOpenClawGateway } from
 import { checkHealth } from './health-report.js';
 import { header, step, success, warn, error, info, blank, summary } from './ui.js';
 import { runNonOcWizard } from './non-oc-wizard.js';
+import { runUninstall } from './uninstall.js';
 
 // Stamped onto every CLI telemetry payload so we can tell which `robot-resources`
 // version a user actually ran. Without this, npx-cached old installers look
@@ -396,5 +397,73 @@ export async function runWizard({ nonInteractive = false, target = null } = {}) 
     } catch {
       // Best-effort — gateway picks up changes on next restart
     }
+  }
+}
+
+/**
+ * Uninstall counterpart to runWizard. Removes the OC plugin install side
+ * (router + scraper plugin dirs, openclaw.json entries) via uninstall.js.
+ *
+ * config.json (and its api_key) is preserved by default so a later re-install
+ * keeps the same identity. `--purge` wipes ~/.robot-resources/ as well.
+ *
+ * Telemetry: emits `wizard_uninstalled` with the list of components actually
+ * removed plus any per-component errors. Fire-and-forget — never block the
+ * uninstall on telemetry latency or failure.
+ */
+export async function runUninstallCommand({ purge = false } = {}) {
+  header();
+  step(purge ? 'Uninstalling Robot Resources (purge)...' : 'Uninstalling Robot Resources...');
+
+  const result = runUninstall({ purge });
+
+  blank();
+  if (result.components_removed.length === 0 && result.errors.length === 0) {
+    info('Nothing to remove — Robot Resources was not installed in this account.');
+  } else {
+    if (result.components_removed.length > 0) {
+      success(`Removed: ${result.components_removed.join(', ')}`);
+    }
+    for (const e of result.errors) {
+      warn(`${e.component}: ${e.message}`);
+    }
+  }
+
+  // Preserve the api_key (unless --purge) so re-running `npx robot-resources`
+  // doesn't issue a second key. Tell the user explicitly so they can purge if
+  // they really want a clean slate.
+  if (!purge) {
+    blank();
+    info('Kept ~/.robot-resources/config.json (your api_key + claim_url).');
+    info('Re-run with --purge to wipe it.');
+  }
+
+  // Best-effort telemetry — same shape as the rest of the CLI's calls.
+  try {
+    const config = readConfig();
+    if (config.api_key) {
+      const platformUrl = process.env.RR_PLATFORM_URL || 'https://api.robotresources.ai';
+      await fetch(`${platformUrl}/v1/telemetry`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.api_key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          product: 'cli',
+          event_type: 'wizard_uninstalled',
+          payload: {
+            cli_version: CLI_VERSION,
+            purge,
+            components_removed: result.components_removed,
+            error_count: result.errors.length,
+            platform: process.platform,
+          },
+        }),
+        signal: AbortSignal.timeout(5_000),
+      });
+    }
+  } catch {
+    // Non-fatal — telemetry must never block the uninstall path.
   }
 }

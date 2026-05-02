@@ -162,7 +162,17 @@ describe('runNonOcWizard — non-interactive without --for=', () => {
     expect(info).toHaveBeenCalledWith(expect.stringContaining('--for=python'));
   });
 
-  it('does not fire telemetry on the bare hint path', async () => {
+  it('emits wizard_path_chosen with path=noninteractive_no_target on the bare hint exit', async () => {
+    await runNonOcWizard({ nonInteractive: true, target: null });
+    const calls = globalThis.fetch.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'));
+    expect(calls.length).toBe(1);
+    const body = JSON.parse(calls[0][1].body);
+    expect(body.event_type).toBe('wizard_path_chosen');
+    expect(body.payload.path).toBe('noninteractive_no_target');
+  });
+
+  it('skips the noninteractive_no_target telemetry when no api_key is in config', async () => {
+    readConfig.mockReturnValue({});
     await runNonOcWizard({ nonInteractive: true, target: null });
     const calls = globalThis.fetch.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'));
     expect(calls.length).toBe(0);
@@ -200,13 +210,25 @@ describe('runNonOcWizard — interactive menu', () => {
     expect(select.mock.calls[0][0].default).toBe('mcp');
   });
 
-  it('exits silently on Ctrl-C (ExitPromptError) without firing telemetry', async () => {
+  it('emits wizard_path_chosen with path=aborted on Ctrl-C (ExitPromptError)', async () => {
     const exitErr = new Error('User force-closed');
     exitErr.name = 'ExitPromptError';
     select.mockRejectedValue(exitErr);
     await expect(runNonOcWizard({ nonInteractive: false, target: null })).resolves.toBeUndefined();
     const calls = globalThis.fetch.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'));
-    expect(calls.length).toBe(0);
+    expect(calls.length).toBe(1);
+    const body = JSON.parse(calls[0][1].body);
+    expect(body.event_type).toBe('wizard_path_chosen');
+    expect(body.payload.path).toBe('aborted');
+  });
+
+  it('also handles ABORT_ERR code on prompt abort with the same telemetry', async () => {
+    const exitErr = new Error('aborted');
+    exitErr.code = 'ABORT_ERR';
+    select.mockRejectedValue(exitErr);
+    await runNonOcWizard({ nonInteractive: false, target: null });
+    const calls = globalThis.fetch.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'));
+    expect(JSON.parse(calls[0][1].body).payload.path).toBe('aborted');
   });
 
   it('emits wizard_path_chosen after the user picks an option', async () => {

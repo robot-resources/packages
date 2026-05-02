@@ -206,6 +206,7 @@ export async function runNonOcWizard({ nonInteractive = false, target = null } =
     info('  npx robot-resources --for=claude-code    # Claude Code MCP config');
     info('  npx robot-resources --for=docs           # docs URL');
     blank();
+    await emitPathChosen('noninteractive_no_target');
     return;
   }
 
@@ -231,8 +232,13 @@ export async function runNonOcWizard({ nonInteractive = false, target = null } =
       ],
     });
   } catch (err) {
-    // User hit Ctrl-C or terminal closed — exit cleanly.
-    if (err && (err.name === 'ExitPromptError' || err.code === 'ABORT_ERR')) return;
+    // User hit Ctrl-C or terminal closed — exit cleanly, but mark the funnel
+    // so we can distinguish "agent shown the prompt and bailed" from
+    // "wizard never reached the prompt at all" in Supabase.
+    if (err && (err.name === 'ExitPromptError' || err.code === 'ABORT_ERR')) {
+      await emitPathChosen('aborted');
+      return;
+    }
     throw err;
   }
 
