@@ -19,6 +19,7 @@ vi.mock('../lib/adapters/_attach.js', async () => {
 
 const { startLocalServer } = await import('../lib/local-server.js');
 const { emitAttachEvent } = await import('../lib/adapters/_attach.js');
+const { _resetLocalServerSingletonForTests } = await import('../lib/adapters/_local-server-once.js');
 const { attach } = await import('../lib/adapters/anthropic-node.js');
 
 let originalBaseUrl;
@@ -26,6 +27,10 @@ let originalAnthropicKey;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Phase 4 introduced a process-singleton for the local server bind so
+  // multiple adapters share one server. Reset between tests so each case
+  // exercises the bind path independently.
+  _resetLocalServerSingletonForTests();
   originalBaseUrl = process.env.ANTHROPIC_BASE_URL;
   originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
 });

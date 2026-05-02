@@ -22,10 +22,13 @@
 
 import { startLocalServer } from '../local-server.js';
 import { emitAttachEvent, detectProvidersFromEnv, readSdkVersion } from './_attach.js';
+import { ensureLocalServerStarted } from './_local-server-once.js';
 
 /**
- * Boot the local server + emit telemetry. Called once per process from
- * `auto.cjs` after the env var is set.
+ * Boot (or reuse) the local server + emit telemetry. Called once per process
+ * from `auto.cjs` after the env var is set. Phase 4 added more adapters;
+ * the local server now binds exactly once per process via the singleton
+ * coordinator regardless of how many adapters call `attach()`.
  */
 export async function attach({ primaryBaseUrl } = {}) {
   const detectedProviders = detectProvidersFromEnv();
@@ -33,10 +36,12 @@ export async function attach({ primaryBaseUrl } = {}) {
 
   let bound;
   try {
-    bound = await startLocalServer({
-      api: null,
-      telemetry: null,
-      detectedProviders,
+    bound = await ensureLocalServerStarted({
+      starter: () => startLocalServer({
+        api: null,
+        telemetry: null,
+        detectedProviders,
+      }),
     });
   } catch (err) {
     await emitAttachEvent({

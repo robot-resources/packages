@@ -1,5 +1,70 @@
 # robot-resources
 
+## 1.12.0
+
+### Minor Changes
+
+- 20650d9: feat(cli): wizard rewrite — installs the Node + Python shims for non-OC agents (Phase 3)
+
+  Phase 3 of the universal-installer refactor. The non-OC wizard branches stop printing docs links and **start actually installing routing into the agent's runtime**.
+
+  **Node path** (`npx robot-resources --for=langchain` or interactive "JS/TS agent"):
+
+  - Detects active shell rc files (`~/.zshrc`, `~/.bashrc`, `~/.bash_profile`, `~/.config/fish/config.fish`).
+  - Appends a marker block with `NODE_OPTIONS="${NODE_OPTIONS:-} --require @robot-resources/router/auto"`.
+  - Idempotent — re-runs are no-ops. `--uninstall` cleanly removes the block.
+  - Falls back to printed instructions on Windows (Phase 6 problem).
+  - Conflict-aware: appends after any existing `--require` (preserves dd-trace, etc.).
+
+  **Python path** (`npx robot-resources --for=python` or interactive "Python agent"):
+
+  - Detects an active or cwd venv: `$VIRTUAL_ENV` → `./.venv` → `./venv` → bail with `--python=` instructions.
+  - **Never silently installs into system Python** (can break OS Python on Linux).
+  - Runs `pip install --upgrade robot-resources>=0.2.0` against the resolved interpreter.
+  - Captures pip stderr tail for telemetry on failure.
+
+  **New telemetry events:**
+
+  - `node_shim_installed` — `{shell, shell_config_path, sdks_detected, files_written, files_with_errors, error_messages, dry_run, already_installed}`. Joins to `wizard_path_chosen` (path=`js`) under the same `api_key_id`.
+  - `python_shim_installed` — `{kind, python_version, sdks_detected, pip_exit_code, pip_stderr_tail}`. Joins to `wizard_path_chosen` (path=`python`).
+  - `wizard_started` payload gains `entry: 'oc' | 'non-oc'`, finer than the existing `openclaw_detected` boolean.
+
+  **Uninstall extended** (`npx robot-resources --uninstall`):
+
+  - Phase 0 already removed OC plugin dirs + `openclaw.json` entries.
+  - Now also: removes the shell-config marker block, runs `pip uninstall -y robot-resources` against the resolved venv. Both idempotent.
+
+  **Files added:**
+
+  - `packages/cli/lib/shell-config.js` — marker-block writer for POSIX shells. Functions: `writeShellLine`, `removeShellLine`, `hasShellLine`, `listShellRcFiles`.
+  - `packages/cli/lib/venv-detect.js` — Python interpreter resolution (active → cwd venv → bail). `runPipInstall` runner with bounded stderr capture.
+  - `packages/cli/lib/install-node-shim.js` — orchestrates the Node path (detect → write → telemetry).
+  - `packages/cli/lib/install-python-shim.js` — orchestrates the Python path (detect → pip → telemetry).
+
+  **Files extended:**
+
+  - `packages/cli/lib/detect.js` — adds `detectNodeAgent`, `detectPythonAgent`, `detectAgentRuntime` (cwd dependency-marker scanners).
+  - `packages/cli/lib/non-oc-wizard.js` — `showJsPath` and `showPythonPath` now invoke the install helpers; printed instructions become the failure fallback.
+  - `packages/cli/lib/uninstall.js` — adds shell-line removal + pip uninstall to `runUninstall`.
+  - `packages/cli/lib/wizard.js` — adds `entry` tag to `wizard_started`.
+
+  **Tests:** 49 new (220 → 234 across the workspace) covering shell-config marker semantics, venv resolution order, install-shim orchestration, agent-runtime detection. All 234 pass.
+
+  **Behavior decisions** (from the plan):
+
+  - NODE_OPTIONS conflict → append after existing `--require` (preserves user tooling).
+  - Mixed cwd (package.json + pyproject.toml) → existing `detectDefaultPath` keeps the JS-default-in-`--yes` behavior; interactive prompt lets users pick.
+  - Consent → `writeShellLine` writes silently in `--yes` (matches existing wizard convention at `setup.js:7`).
+
+  **Lifts the `RR_AUTOATTACH=1` gate from Phases 1+2.** New wizard runs that complete the Node or Python path will produce real `route_completed` events — the first non-OC routing volume the platform has ever seen.
+
+  **Out of scope:**
+
+  - Windows shell-config (Phase 6 — printed-instructions fallback for now).
+  - OpenAI + Google adapters (Phase 4).
+  - `npx @robot-resources/router` standalone wizard (Phase 5).
+  - Wizard-time prompt to disambiguate mixed cwd interactively (current behavior: `detectDefaultPath` returns `js`, user can override at the menu).
+
 ## 1.11.2
 
 ### Patch Changes
