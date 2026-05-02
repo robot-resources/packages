@@ -43,7 +43,7 @@ const CLI_VERSION = (() => {
  *
  * No Python, no venv, no systemd, no port probe.
  */
-export async function runWizard({ nonInteractive = false, target = null } = {}) {
+export async function runWizard({ nonInteractive = false, target = null, scope = 'full' } = {}) {
   header();
 
   // Detect OC once up front. Used both to branch into the non-OC wizard and
@@ -147,6 +147,10 @@ export async function runWizard({ nonInteractive = false, target = null } = {}) 
             // non-OC wizard handles (Node shim, Python shim, MCP, docs).
             // Finer per-path attribution still comes from wizard_path_chosen.
             entry: openclawDetected ? 'oc' : 'non-oc',
+            // Phase 5: 'full' is the unified `npx robot-resources` flow;
+            // 'router-only' is the standalone `npx @robot-resources/router`
+            // bin (skips scraper).
+            scope,
           },
         }),
         signal: AbortSignal.timeout(5_000),
@@ -214,27 +218,33 @@ export async function runWizard({ nonInteractive = false, target = null } = {}) 
   // Independent of router. Register scraper MCP in openclaw.json (if OC
   // is present). Gateway restart happens once at the very end (merged
   // with plugin restart).
-
-  blank();
-  step('Installing Scraper...');
+  //
+  // Phase 5: when invoked from `npx @robot-resources/router` (scope=router-only),
+  // we skip this step entirely. The standalone router CLI ships a smaller
+  // surface for users who explicitly want only routing, no scraper.
 
   let scraperRegistered = false;
 
-  scraperRegistered = registerScraperMcp();
-  if (scraperRegistered) {
-    success('Scraper MCP registered in OpenClaw — scraper_compress_url(url) available');
-    results.scraper = true;
-    results.scraperMcpRegistered = true;
-  } else {
-    try {
-      const ocConfig = JSON.parse(readFileSync(join(homedir(), '.openclaw', 'openclaw.json'), 'utf-8'));
-      if (ocConfig?.mcp?.servers?.['robot-resources-scraper']) {
-        success('Scraper MCP already registered in OpenClaw');
-        results.scraper = true;
-        results.scraperMcpRegistered = true;
+  if (scope !== 'router-only') {
+    blank();
+    step('Installing Scraper...');
+
+    scraperRegistered = registerScraperMcp();
+    if (scraperRegistered) {
+      success('Scraper MCP registered in OpenClaw — scraper_compress_url(url) available');
+      results.scraper = true;
+      results.scraperMcpRegistered = true;
+    } else {
+      try {
+        const ocConfig = JSON.parse(readFileSync(join(homedir(), '.openclaw', 'openclaw.json'), 'utf-8'));
+        if (ocConfig?.mcp?.servers?.['robot-resources-scraper']) {
+          success('Scraper MCP already registered in OpenClaw');
+          results.scraper = true;
+          results.scraperMcpRegistered = true;
+        }
+      } catch {
+        // No openclaw.json — not on OC, skip
       }
-    } catch {
-      // No openclaw.json — not on OC, skip
     }
   }
 

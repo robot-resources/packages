@@ -11,6 +11,9 @@
     "./telemetry": "./lib/telemetry.js",
     "./package.json": "./package.json"
   },
+  "bin": {
+    "robot-resources-router": "./bin/setup.js"
+  },
   "scripts": {
     "test": "vitest",
     "test:run": "vitest run"
@@ -18,6 +21,7 @@
   "files": [
     "index.js",
     "auto.cjs",
+    "bin",
     "openclaw.plugin.json",
     "lib"
   ],

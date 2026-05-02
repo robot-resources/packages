@@ -19,13 +19,19 @@ if (args.includes('--uninstall')) {
   const targetArg = args.find((a) => a.startsWith('--for='));
   const target = targetArg ? targetArg.slice('--for='.length) : null;
 
+  // Phase 5: --scope=router-only is the entry from `npx @robot-resources/router`
+  // (the standalone bin). Skips scraper steps. Default 'full' matches the
+  // unified `npx robot-resources` behavior.
+  const scopeArg = args.find((a) => a.startsWith('--scope='));
+  const scope = scopeArg ? scopeArg.slice('--scope='.length) : 'full';
+
   // Treat piped/CI runs (no TTY on stdin OR stdout) as non-interactive so the
   // wizard never blocks on a prompt that can't be answered. The interactive
   // menu is only opened when both stdin and stdout are real terminals.
   const hasTty = Boolean(process.stdin.isTTY && process.stdout.isTTY);
   const nonInteractive = explicitNonInteractive || !hasTty;
 
-  runWizard({ nonInteractive, target }).catch((err) => {
+  runWizard({ nonInteractive, target, scope }).catch((err) => {
     console.error(`\n  ✗ Setup failed: ${err.message}\n`);
     process.exit(1);
   });

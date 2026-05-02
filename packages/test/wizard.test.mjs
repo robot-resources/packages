@@ -35,6 +35,10 @@ vi.mock('../lib/tool-config.js', () => ({
   restartOpenClawGateway: vi.fn(() => Promise.resolve()),
 }));
 
+vi.mock('../lib/uninstall.js', () => ({
+  runUninstall: vi.fn(() => ({ components_removed: [], errors: [] })),
+}));
+
 vi.mock('../lib/health-report.js', () => ({
   checkHealth: vi.fn(() => Promise.resolve({
     status: 'healthy',
@@ -59,7 +63,7 @@ vi.mock('../lib/non-oc-wizard.js', () => ({
 
 const { writeFileSync } = await import('node:fs');
 const { readConfig, writeConfig } = await import('../lib/config.mjs');
-const { configureToolRouting, restartOpenClawGateway } = await import('../lib/tool-config.js');
+const { configureToolRouting, registerScraperMcp, restartOpenClawGateway } = await import('../lib/tool-config.js');
 const { isOpenClawInstalled } = await import('../lib/detect.js');
 const { warn, info } = await import('../lib/ui.js');
 const { runNonOcWizard } = await import('../lib/non-oc-wizard.js');
@@ -240,6 +244,54 @@ describe('wizard (Option 4 — in-process server, no daemon-install path)', () =
       // No wizard body — runNonOcWizard handles it.
       expect(configureToolRouting).not.toHaveBeenCalled();
       expect(runNonOcWizard).toHaveBeenCalledWith({ nonInteractive: true, target: 'langchain' });
+    });
+  });
+
+  describe('Phase 5 — scope=router-only', () => {
+    it('skips registerScraperMcp when scope=router-only on the OC path', async () => {
+      isOpenClawInstalled.mockReturnValue(true);
+      readConfig.mockReturnValue({ api_key: 'rr_live_existing' });
+      configureToolRouting.mockReturnValue([
+        { name: 'OpenClaw', action: 'installed', configActivated: true },
+      ]);
+
+      await runWizard({ nonInteractive: false, scope: 'router-only' });
+
+      expect(registerScraperMcp).not.toHaveBeenCalled();
+    });
+
+    it('still calls registerScraperMcp on the default scope=full', async () => {
+      isOpenClawInstalled.mockReturnValue(true);
+      readConfig.mockReturnValue({ api_key: 'rr_live_existing' });
+      configureToolRouting.mockReturnValue([
+        { name: 'OpenClaw', action: 'installed', configActivated: true },
+      ]);
+
+      await runWizard({ nonInteractive: false });
+
+      expect(registerScraperMcp).toHaveBeenCalled();
+    });
+
+    it('tags wizard_started.scope so Supabase can segment by entry CLI', async () => {
+      isOpenClawInstalled.mockReturnValue(true);
+      readConfig.mockReturnValue({ api_key: 'rr_live_existing' });
+      configureToolRouting.mockReturnValue([]);
+
+      await runWizard({ nonInteractive: false, scope: 'router-only' });
+
+      const payload = captureWizardStartedPayload();
+      expect(payload).toEqual(expect.objectContaining({ scope: 'router-only' }));
+    });
+
+    it('default scope is "full" in wizard_started payload', async () => {
+      isOpenClawInstalled.mockReturnValue(true);
+      readConfig.mockReturnValue({ api_key: 'rr_live_existing' });
+      configureToolRouting.mockReturnValue([]);
+
+      await runWizard({ nonInteractive: false });
+
+      const payload = captureWizardStartedPayload();
+      expect(payload).toEqual(expect.objectContaining({ scope: 'full' }));
     });
   });
 
