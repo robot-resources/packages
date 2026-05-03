@@ -323,3 +323,71 @@ describe('runNonOcWizard — interactive menu', () => {
     expect(JSON.parse(calls[0][1].body).payload.path).toBe('docs');
   });
 });
+
+describe('runNonOcWizard — interactive timeout fallback (Phase 3.6)', () => {
+  // Use a small timeout so tests stay fast. The select() mock never resolves,
+  // simulating an automated runner where stdin.isTTY=true but no keystroke
+  // ever lands.
+  function neverResolves() {
+    return new Promise(() => {});
+  }
+
+  it('falls back to auto-install when select() never resolves and cwd is Node', async () => {
+    process.env.RR_WIZARD_SELECT_TIMEOUT_MS = '50';
+    select.mockReturnValue(neverResolves());
+    detectAgentRuntime.mockReturnValue({ kind: 'node', evidence: ['@anthropic-ai/sdk'] });
+
+    await runNonOcWizard({ nonInteractive: false, target: null });
+
+    expect(installNodeShim).toHaveBeenCalledOnce();
+    expect(installPythonShim).not.toHaveBeenCalled();
+    const calls = globalThis.fetch.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'));
+    expect(JSON.parse(calls[0][1].body).payload.path).toBe('js');
+
+    delete process.env.RR_WIZARD_SELECT_TIMEOUT_MS;
+  });
+
+  it('falls back to auto-install Python when timeout fires and cwd is Python', async () => {
+    process.env.RR_WIZARD_SELECT_TIMEOUT_MS = '50';
+    select.mockReturnValue(neverResolves());
+    detectAgentRuntime.mockReturnValue({ kind: 'python', evidence: ['anthropic'] });
+
+    await runNonOcWizard({ nonInteractive: false, target: null });
+
+    expect(installPythonShim).toHaveBeenCalledOnce();
+    const calls = globalThis.fetch.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'));
+    expect(JSON.parse(calls[0][1].body).payload.path).toBe('python');
+
+    delete process.env.RR_WIZARD_SELECT_TIMEOUT_MS;
+  });
+
+  it('emits wizard_path_chosen=interactive_timeout when timeout fires and cwd has no runtime', async () => {
+    process.env.RR_WIZARD_SELECT_TIMEOUT_MS = '50';
+    select.mockReturnValue(neverResolves());
+    detectAgentRuntime.mockReturnValue({ kind: null });
+
+    await runNonOcWizard({ nonInteractive: false, target: null });
+
+    expect(installNodeShim).not.toHaveBeenCalled();
+    expect(installPythonShim).not.toHaveBeenCalled();
+    const calls = globalThis.fetch.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'));
+    expect(JSON.parse(calls[0][1].body).payload.path).toBe('interactive_timeout');
+
+    delete process.env.RR_WIZARD_SELECT_TIMEOUT_MS;
+  });
+
+  it('user picking before timeout uses the picked path (no timeout fallback)', async () => {
+    process.env.RR_WIZARD_SELECT_TIMEOUT_MS = '5000'; // long enough not to fire
+    select.mockResolvedValue('docs');
+    detectAgentRuntime.mockReturnValue({ kind: 'node', evidence: [] });
+
+    await runNonOcWizard({ nonInteractive: false, target: null });
+
+    // Despite Node project on disk, user explicitly picked 'docs' — honor it.
+    expect(installNodeShim).not.toHaveBeenCalled();
+    const calls = globalThis.fetch.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'));
+    expect(JSON.parse(calls[0][1].body).payload.path).toBe('docs');
+
+    delete process.env.RR_WIZARD_SELECT_TIMEOUT_MS;
+  });
+});

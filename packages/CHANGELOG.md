@@ -1,5 +1,32 @@
 # robot-resources
 
+## 1.12.2
+
+### Patch Changes
+
+- d9f0f9d: fix(cli): auto-install matching shim in non-interactive mode when cwd is unambiguous (Phase 3.5)
+
+  Phase 3 closed the visibility gap (we now see `wizard_path_chosen` events for the silent-bail-out branch), but it didn't close the **install** gap. The first 5 post-1.12.0 non-OC users all ran `npx robot-resources` non-interactively without `--for=`, hit the bail-out, and walked away with nothing installed. The Phase 3 wizard required users to pass an explicit target — too much friction for CI/agents that auto-run the wizard from their repo.
+
+  **Fix:** before printing the `--for=` hint and exiting, call `detectAgentRuntime(cwd)` (the existing detector from Phase 3). When the project shape is unambiguous:
+
+  - `kind: 'node'` → auto-run the Node shim install
+  - `kind: 'python'` → auto-run the Python shim install
+  - `kind: 'both'` → default to Node (per the plan's mixed-cwd decision)
+  - `kind: null` → fall through to today's print-hint exit (truly empty cwds still get the hint)
+
+  Single file change (`packages/cli/lib/non-oc-wizard.js`), ~15 lines of real logic.
+
+  **Live verification (3 cwd shapes against this branch):**
+
+  - `package.json` + `@anthropic-ai/sdk` → wrote `NODE_OPTIONS` to `~/.zshrc` ✓
+  - `requirements.txt` + `anthropic` (with `./.venv`) → ran `pip install --upgrade robot-resources>=0.2.0` against the venv ✓
+  - Empty cwd → printed the `--for=` hint, exited (preserved Phase 3 behavior) ✓
+
+  **Tests:** 5 new in `non-oc-wizard.test.mjs` (auto-install Node / Python / both, preserve hint when null, telemetry skip without api_key). 241/241 CLI tests pass.
+
+  **Telemetry:** the auto-install path emits `wizard_path_chosen` with `path='js'` or `path='python'` so it joins cleanly with the existing funnel queries — no new event types.
+
 ## 1.12.1
 
 ### Patch Changes

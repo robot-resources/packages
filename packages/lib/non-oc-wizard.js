@@ -266,19 +266,40 @@ export async function runNonOcWizard({ nonInteractive = false, target = null } =
 
   const defaultPath = detectDefaultPath() ?? 'js';
 
+  // Phase 3.6: race the prompt against a timeout. Some agent runners report
+  // stdin.isTTY=true (so `nonInteractive` ends up false), then never deliver
+  // a keystroke — `select()` blocks forever and the wizard exits silently
+  // without firing wizard_path_chosen. The May-2 23:31 RU cluster all hit
+  // this: 5 wizard_started events, zero wizard_path_chosen.
+  //
+  // After SELECT_TIMEOUT_MS, we treat the session as practically
+  // non-interactive and fall through to the same auto-detect path the
+  // nonInteractive branch above uses (Phase 3.5).
+  const SELECT_TIMEOUT_MS = Number(process.env.RR_WIZARD_SELECT_TIMEOUT_MS) || 30_000;
+  const TIMED_OUT = Symbol('select_timeout');
+
   let chosen;
+  let timer;
   try {
-    chosen = await select({
-      message: 'What are you building?',
-      default: defaultPath,
-      choices: [
-        { name: PATH_LABELS.js, value: 'js' },
-        { name: PATH_LABELS.python, value: 'python' },
-        { name: PATH_LABELS.mcp, value: 'mcp' },
-        { name: PATH_LABELS.docs, value: 'docs' },
-        { name: PATH_LABELS['install-oc'], value: 'install-oc' },
-      ],
-    });
+    chosen = await Promise.race([
+      select({
+        message: 'What are you building?',
+        default: defaultPath,
+        choices: [
+          { name: PATH_LABELS.js, value: 'js' },
+          { name: PATH_LABELS.python, value: 'python' },
+          { name: PATH_LABELS.mcp, value: 'mcp' },
+          { name: PATH_LABELS.docs, value: 'docs' },
+          { name: PATH_LABELS['install-oc'], value: 'install-oc' },
+        ],
+      }),
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve(TIMED_OUT), SELECT_TIMEOUT_MS);
+        // Don't keep the event loop alive purely for this timer — once the
+        // user picks, the process should be free to exit.
+        if (typeof timer.unref === 'function') timer.unref();
+      }),
+    ]);
   } catch (err) {
     // User hit Ctrl-C or terminal closed — exit cleanly, but mark the funnel
     // so we can distinguish "agent shown the prompt and bailed" from
@@ -288,6 +309,34 @@ export async function runNonOcWizard({ nonInteractive = false, target = null } =
       return;
     }
     throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+
+  if (chosen === TIMED_OUT) {
+    // No keystroke after SELECT_TIMEOUT_MS — practically non-interactive.
+    // Mirror the Phase 3.5 auto-detect logic.
+    blank();
+    info(`No input received after ${Math.round(SELECT_TIMEOUT_MS / 1000)}s — treating session as non-interactive.`);
+    const runtime = detectAgentRuntime();
+    let autoTarget = null;
+    if (runtime.kind === 'node' || runtime.kind === 'both') autoTarget = 'js';
+    else if (runtime.kind === 'python') autoTarget = 'python';
+
+    if (autoTarget) {
+      info(`Detected a ${autoTarget === 'js' ? 'Node' : 'Python'} project — installing the matching shim automatically.`);
+      blank();
+      await runPath(autoTarget);
+      await emitPathChosen(autoTarget);
+      return;
+    }
+
+    // Truly empty cwd — nothing to install. Surface the timeout so the
+    // funnel can be queried separately from genuine aborts.
+    blank();
+    info('No project shape detected — nothing to install. Re-run with --for=<target>.');
+    await emitPathChosen('interactive_timeout');
+    return;
   }
 
   await runPath(chosen);
