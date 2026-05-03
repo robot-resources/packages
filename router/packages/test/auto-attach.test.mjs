@@ -39,26 +39,17 @@ function runChild(envOverrides, script = 'console.log(process.env.ANTHROPIC_BASE
   return { stdout: result.stdout.trim(), stderr: result.stderr.trim(), status: result.status };
 }
 
-describe('auto.cjs — gating', () => {
-  it('does NOT set ANTHROPIC_BASE_URL when RR_AUTOATTACH is unset', () => {
+describe('auto.cjs — gating (Phase 7: opt-out semantics)', () => {
+  it('sets ANTHROPIC_BASE_URL when RR_AUTOATTACH is unset (default ON)', () => {
     const { stdout } = runChild({
       RR_AUTOATTACH: '',
       ANTHROPIC_BASE_URL: '',
       RR_AUTOATTACH_DRY_RUN: '1',
     });
-    expect(stdout).toBe('UNSET');
+    expect(stdout).toBe('http://127.0.0.1:18790/anthropic');
   });
 
-  it('does NOT set ANTHROPIC_BASE_URL when RR_AUTOATTACH=0', () => {
-    const { stdout } = runChild({
-      RR_AUTOATTACH: '0',
-      ANTHROPIC_BASE_URL: '',
-      RR_AUTOATTACH_DRY_RUN: '1',
-    });
-    expect(stdout).toBe('UNSET');
-  });
-
-  it('sets ANTHROPIC_BASE_URL to localhost when RR_AUTOATTACH=1', () => {
+  it('sets ANTHROPIC_BASE_URL when RR_AUTOATTACH=1 (explicit on, same as default)', () => {
     const { stdout } = runChild({
       RR_AUTOATTACH: '1',
       ANTHROPIC_BASE_URL: '',
@@ -67,14 +58,42 @@ describe('auto.cjs — gating', () => {
     expect(stdout).toBe('http://127.0.0.1:18790/anthropic');
   });
 
+  it('does NOT set ANTHROPIC_BASE_URL when RR_AUTOATTACH=0 (explicit opt-out)', () => {
+    const { stdout } = runChild({
+      RR_AUTOATTACH: '0',
+      ANTHROPIC_BASE_URL: '',
+      RR_AUTOATTACH_DRY_RUN: '1',
+    });
+    expect(stdout).toBe('UNSET');
+  });
+
   it('respects an existing ANTHROPIC_BASE_URL — never clobbers a user override', () => {
     const userUrl = 'https://my-corporate-proxy.example.com';
     const { stdout } = runChild({
-      RR_AUTOATTACH: '1',
       ANTHROPIC_BASE_URL: userUrl,
       RR_AUTOATTACH_DRY_RUN: '1',
     });
     expect(stdout).toBe(userUrl);
+  });
+
+  it('still attaches Anthropic env-var even when OPENAI_BASE_URL is set (per-SDK override scope)', () => {
+    // Phase 7 fix: previously a single user-set env var caused us to skip
+    // ALL adapters. Now each SDK's env var is respected independently.
+    const result = spawnSync(process.execPath, ['--require', AUTO_PATH, '-e',
+      'console.log(JSON.stringify({a: process.env.ANTHROPIC_BASE_URL, o: process.env.OPENAI_BASE_URL}))',
+    ], {
+      env: {
+        ...process.env,
+        ANTHROPIC_BASE_URL: '',
+        OPENAI_BASE_URL: 'https://my-openai-proxy.example.com',
+        RR_AUTOATTACH_DRY_RUN: '1',
+      },
+      encoding: 'utf-8',
+      timeout: 10_000,
+    });
+    const parsed = JSON.parse(result.stdout.trim());
+    expect(parsed.a).toBe('http://127.0.0.1:18790/anthropic');
+    expect(parsed.o).toBe('https://my-openai-proxy.example.com');
   });
 
   it('singleton guard: loading auto.cjs twice is safe', () => {
@@ -90,7 +109,7 @@ describe('auto.cjs — gating', () => {
         `require(${JSON.stringify(AUTO_PATH)}); console.log(process.env.ANTHROPIC_BASE_URL || "UNSET")`,
       ],
       {
-        env: { ...process.env, RR_AUTOATTACH: '1', ANTHROPIC_BASE_URL: '', RR_AUTOATTACH_DRY_RUN: '1' },
+        env: { ...process.env, ANTHROPIC_BASE_URL: '', RR_AUTOATTACH_DRY_RUN: '1' },
         encoding: 'utf-8',
         timeout: 10_000,
       },

@@ -1,5 +1,28 @@
 # robot-resources
 
+## 1.12.3
+
+### Patch Changes
+
+- 85312d2: fix(cli): timeout fallback on interactive prompt for hung-but-claimed-interactive sessions (Phase 3.6)
+
+  The 5 RU users that signed up at 23:31 UTC ran `npx robot-resources` against `1.12.1`/`1.12.2` with `non_interactive: false`. They produced `wizard_started` but **no `wizard_path_chosen`** — neither a pick nor a Ctrl-C abort. Symptom: their environment reports `process.stdin.isTTY === true` so the wizard enters the interactive `select()` branch, but no keystroke ever arrives. `@inquirer/prompts.select` blocks indefinitely; the process exits silently before any path event fires.
+
+  Phase 3.5 fixed the symmetric bug for `nonInteractive=true` (wizard knows it's non-interactive but bails). This is the inverse: wizard _thinks_ it's interactive but the session is hung.
+
+  **Fix** (one-file change in `packages/cli/lib/non-oc-wizard.js`): race the `select()` against a 30s timeout. On timeout:
+
+  - If `detectAgentRuntime()` returns `'node'` / `'python'` / `'both'` → auto-install matching shim (mirror Phase 3.5).
+  - Otherwise → emit a new `wizard_path_chosen` value `path='interactive_timeout'` so the funnel can segment "hung session, no project on disk" from genuine `'aborted'` and `'noninteractive_no_target'` cases.
+
+  Override available: `RR_WIZARD_SELECT_TIMEOUT_MS=<ms>` (used by tests; can also extend the timeout for slow human typists if anyone complains).
+
+  The timer is `unref()`-ed so a quick user pick lets the process exit without waiting for the timer.
+
+  **Tests:** 4 new in `non-oc-wizard.test.mjs` covering Node-cwd timeout / Python-cwd timeout / empty-cwd timeout / user-picks-before-timeout. 245/245 CLI tests pass.
+
+  **Telemetry:** new `wizard_path_chosen` value `'interactive_timeout'` for empty-cwd hung sessions. Auto-install fallback emits the canonical `'js'` / `'python'` (no new event types) so the existing funnel join keeps working.
+
 ## 1.12.2
 
 ### Patch Changes

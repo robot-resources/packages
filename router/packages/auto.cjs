@@ -6,41 +6,49 @@
  * Loaded via `NODE_OPTIONS="--require @robot-resources/router/auto"`. Runs
  * before the user's code so it can intercept the agent's LLM SDK calls.
  *
- * Phase 1 scope:
- *   - Anthropic SDK only.
- *   - Behind `RR_AUTOATTACH=1` gate (the wizard does NOT yet write
- *     NODE_OPTIONS into shell config — that's Phase 3, after we prove the
- *     bundler-fixture matrix).
- *   - Mechanism: set `ANTHROPIC_BASE_URL` to a localhost URL and start an
- *     in-process routing server. The Anthropic SDK reads that env var in
- *     its constructor (verified against @anthropic-ai/sdk client.js line 50).
- *     No SDK monkey-patching needed.
+ * Mechanism: set `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` to a localhost URL
+ * and start an in-process routing server. The Anthropic + OpenAI SDKs read
+ * those env vars in their constructors. No SDK monkey-patching needed for
+ * those two; Google's SDK doesn't honor an env var so the Google adapter
+ * patches the constructor at `Module._load` time.
  *
  * Lifecycle: the local server lives and dies with the agent's Node process.
  * Same pattern as the OC plugin — no daemon, no service registration.
+ *
+ * Opt-out: `RR_AUTOATTACH=0` skips everything. Useful for the rare case
+ * where a user installed the shim then wants to bypass it without removing
+ * the NODE_OPTIONS line from their shell.
+ *
+ * `RR_AUTOATTACH_DRY_RUN=1` skips the actual server bind + telemetry — used
+ * by the test suite to assert pure env-var behavior without binding ports.
+ *
+ * History: shipped Phase 1 with `RR_AUTOATTACH=1` opt-in gate while we
+ * proved the bundler matrix. Phase 7 (this revision) lifts the gate after
+ * 45h of clean OC traffic + multiple wizard-success funnel completions
+ * confirmed the architecture works. Default is now ON.
  *
  * CJS extension is deliberate: `--require` only accepts CJS in Node 18.
  * ESM-only `--import` is Node 20.6+ which we don't yet require. The actual
  * adapter modules below are ESM and loaded via dynamic import.
  */
 
-// Gate. Phase 1 ships opt-in until the bundler matrix proves out.
-if (process.env.RR_AUTOATTACH !== '1') return;
+// Phase 7: opt-out, not opt-in. Default behavior is ON. Users who explicitly
+// want to bypass the shim (e.g. one-shot scripts that need the raw SDK)
+// set RR_AUTOATTACH=0 in that one process's env.
+if (process.env.RR_AUTOATTACH === '0') return;
 
 // Singleton — auto.cjs may load multiple times in worker threads / IPC.
 if (globalThis.__RR_AUTOATTACH_LOADED__) return;
 globalThis.__RR_AUTOATTACH_LOADED__ = true;
 
-// Respect a pre-existing user override. If they explicitly pointed the SDK
-// somewhere (custom proxy, dev-stub, etc.), don't fight them.
-if (process.env.ANTHROPIC_BASE_URL) return;
-
 // Set env vars EAGERLY (sync). The Anthropic + OpenAI SDKs read these on
 // every constructor call; setting them now means user code that runs after
 // auto.cjs picks up our localhost URL even before async server bind finishes.
 //
-// Anthropic: respects pre-existing user override.
-// OpenAI:    same — never clobber a user-set OPENAI_BASE_URL.
+// Per-SDK override respect: if a user has explicitly pointed ANTHROPIC_BASE_URL
+// somewhere (corp proxy, dev stub), we leave THAT one alone — but still attach
+// OpenAI + Google. Phase 7 fix: the previous all-or-nothing early-return was
+// over-broad; one custom env var shouldn't kill the other adapters.
 //
 // Google: no env-var override exists; the Google adapter monkey-patches the
 // SDK at Module._load time instead.

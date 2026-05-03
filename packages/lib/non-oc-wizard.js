@@ -131,16 +131,14 @@ async function showPythonPath() {
       info(`  Detected SDKs: ${result.sdks.join(', ')}`);
     }
     blank();
-    info('Set RR_AUTOATTACH=1 in your shell, then run your Python agent.');
-    info('Every anthropic.Anthropic() instance routes through Robot Resources.');
-    info('  echo \'export RR_AUTOATTACH=1\' >> ~/.zshrc   # or your shell rc');
+    info('Run your Python agent — every anthropic / openai / google_generativeai');
+    info('SDK call routes through Robot Resources automatically.');
+    info('To opt out for a single command: RR_AUTOATTACH=0 python your-script.py');
   } else {
     warn(result.message);
     blank();
     info('Manual install (run inside your venv):');
     info('  pip install --upgrade robot-resources');
-    info('Then set:');
-    info('  export RR_AUTOATTACH=1');
   }
   blank();
   info('Docs: https://robotresources.ai/docs/crewai');
