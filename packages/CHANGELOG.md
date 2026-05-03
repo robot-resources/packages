@@ -1,5 +1,63 @@
 # robot-resources
 
+## 1.13.0
+
+### Minor Changes
+
+- 73e9d98: fix(cli): NODE_OPTIONS uses absolute path to copied router files (Phase 8)
+
+  **Root cause for `adapter_attached: 0` in Supabase despite `node_shim_installed: 8`.**
+
+  The Phase 3-7 wizard wrote a NODE_OPTIONS line of the form:
+
+  ```sh
+  export NODE_OPTIONS="${NODE_OPTIONS:-} --require @robot-resources/router/auto"
+  ```
+
+  Node's `--require` uses the same module resolution as `require()` from the current working directory. The bare module form `@robot-resources/router/auto` only resolved when the user was `cd`'d inside a project that had `@robot-resources/router` in its node_modules. From any other cwd (their home, a Python project, etc.) **Node crashed with `Cannot find module '@robot-resources/router/auto'`** — every `node` / `npm` / `npx` command in that shell was broken.
+
+  The 4 Linux users with `node_shim_installed` events on May 2-3 had this broken line in their `.bashrc`. The shim never executed because Node never even started. Result: zero `adapter_attached`, zero `route_completed` from any of them.
+
+  **Fix.** Mirror the OC plugin path's pattern (`installPluginFiles()` in `tool-config.js`): copy the router files to a stable user-scoped absolute location, then write that path in NODE_OPTIONS.
+
+  ```sh
+  export NODE_OPTIONS="${NODE_OPTIONS:-} --require /Users/x/.robot-resources/router/auto.cjs"
+  ```
+
+  Wizard now:
+
+  1. Resolves `@robot-resources/router` from its own dependency tree (`require.resolve('@robot-resources/router/package.json')`).
+  2. Copies `auto.cjs` + `index.js` + `package.json` + `lib/` to `~/.robot-resources/router/`. lib/ is wiped first so router upgrades don't accumulate stale files.
+  3. Returns the absolute path to `auto.cjs`.
+  4. `writeShellLine({ autoPath })` builds the NODE_OPTIONS line with that absolute path.
+
+  Result: NODE_OPTIONS works from any cwd. Self-contained. Survives npm/npx cache cleanup.
+
+  **Files:**
+
+  - `packages/cli/lib/install-router-files.js` — NEW. Extracted for testability.
+  - `packages/cli/lib/install-node-shim.js` — calls `installRouterFiles()` first, fails the install (with telemetry) if the copy throws.
+  - `packages/cli/lib/shell-config.js` — `writeShellLine` now takes `{ autoPath }` (required); `POSIX_LINE` / `FISH_LINE` constants replaced with `buildPosixLine` / `buildFishLine` factories.
+  - `packages/cli/lib/uninstall.js` — also removes the copied `~/.robot-resources/router/` dir on `--uninstall`.
+  - `packages/cli/test/shell-config.test.mjs` + `install-shims.test.mjs` — updated for new signatures, +3 new tests covering Phase 8 absolute-path behavior + router-copy-failure path.
+
+  **Live verified end-to-end:**
+
+  1. Wizard runs in a project dir → copies router files to `~/.robot-resources/router/`, writes NODE_OPTIONS with absolute path
+  2. Open a Node shell from `/tmp` (not the project dir, not anywhere with the package): Node loads the shim, `ANTHROPIC_BASE_URL` set to localhost ✓
+  3. `--uninstall` removes both the shell line AND the copied router dir ✓
+
+  **Tests:** 248 CLI tests pass.
+
+  **Telemetry:** `node_shim_installed` gains `auto_path` field so we can verify in Supabase that future events carry the absolute path. New `reason` value `router_copy_failed` for the cold-EACCES case.
+
+  **Stranded user note:** The 4 existing Linux users with broken NODE_OPTIONS lines (`5a4d433d`, `e935e9dc`, `364e1db1`, `f89f305f`) need to either:
+
+  - Manually remove the marker block from their shell rc, OR
+  - Re-run `npx robot-resources@latest` to overwrite with the new absolute path
+
+  We have no remote-push channel. Worst case, their broken NODE_OPTIONS is silently breaking every Node command they run.
+
 ## 1.12.4
 
 ### Patch Changes
