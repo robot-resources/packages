@@ -1,5 +1,47 @@
 # robot-resources
 
+## 1.12.4
+
+### Patch Changes
+
+- 3df9cf9: fix(router,cli): lift RR_AUTOATTACH gate — auto-attach is now the default (Phase 7)
+
+  Critical fix. The 3 successful Phase 3-flow installs (real users on `1.12.2`/`1.12.3` whose wizard completed `node_shim_installed`) were producing **zero `adapter_attached` and `route_completed` events**. They had the shim installed but it was a no-op.
+
+  **Root cause:** `auto.cjs` and `_autoattach/__init__.py` shipped Phase 1+2 with a `RR_AUTOATTACH=1` gate at the top — opt-in until the bundler matrix was proven. The original plan had Phase 3 lift the gate; that step got missed. The wizard wrote `NODE_OPTIONS=--require @robot-resources/router/auto` to user shells, the shim loaded, hit the gate, **early-returned without setting `ANTHROPIC_BASE_URL` or starting the local server**. SDK calls went straight to api.anthropic.com — no routing, no swap, no telemetry.
+
+  **Fix:** invert the gate to opt-out. Default is now ON. Users who specifically want to bypass the shim for one process set `RR_AUTOATTACH=0`. Same env var, opposite polarity.
+
+  **Second fix in the same PR:** the previous all-or-nothing early-return for a user-set `ANTHROPIC_BASE_URL` is replaced by per-SDK respect. If the user set `ANTHROPIC_BASE_URL` to a corp proxy, we leave that alone but still attach OpenAI + Google. One custom env var no longer kills the other adapters.
+
+  **Wizard message update:** the Phase 3 install message told Python users to `set RR_AUTOATTACH=1` in their shell. That's now wrong (and probably caused some of the silent-failure cohort). Replaced with: "Run your Python agent — every anthropic / openai / google_generativeai SDK call routes through Robot Resources automatically. To opt out for a single command: `RR_AUTOATTACH=0 python your-script.py`".
+
+  **Files:**
+
+  - `router/packages/router/auto.cjs` — gate inverted, all-or-nothing user-override removed
+  - `router/packages/router/test/auto-attach.test.mjs` — 5 tests updated for opt-out semantics
+  - `python/robot-resources/src/robot_resources/_autoattach/__init__.py` — gate inverted
+  - `python/robot-resources/tests/test_autoattach.py` — 3 gating tests updated
+  - `python/robot-resources/pyproject.toml` — bumped to **0.4.0** (manual publish required)
+  - `python/robot-resources/src/robot_resources/__init__.py` — version bump
+  - `packages/cli/lib/non-oc-wizard.js` — wizard install message no longer instructs users to set `RR_AUTOATTACH=1`
+
+  **Tests:** 357 router + 245 CLI + 46 Python = 648/648 pass.
+
+  **Manual publish required after merge:**
+
+  ```
+  cd python/robot-resources
+  rm -rf dist && python3 -m build && python3 -m twine upload dist/*
+  ```
+
+  **Stranded users:** the existing successful-install non-OC users (`364e1db1`, `f89f305f`, `1bba3b7d`) have OLD shims cached in their npm cache or installed site-packages. Their NODE_OPTIONS still points at `@robot-resources/router/auto` from `4.4.0`, which has the old gate. Until they re-install (e.g. `npx robot-resources` re-fetches `4.4.1` or `pip install --upgrade robot-resources` lands `0.4.0`), they remain in the silent-failure state. We have no remote-push mechanism for them.
+
+  For users running `npx robot-resources@latest` AFTER `1.12.4` ships: clean install, default ON, immediately produces `route_completed` events on first agent call.
+
+- Updated dependencies [3df9cf9]
+  - @robot-resources/router@4.4.1
+
 ## 1.12.3
 
 ### Patch Changes
