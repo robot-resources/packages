@@ -11,10 +11,19 @@ import { join } from 'node:path';
  * regex-matching against the user's actual shell content:
  *
  *     # >>> robot-resources: NODE_OPTIONS auto-attach >>>
- *     export NODE_OPTIONS="${NODE_OPTIONS:-} --require @robot-resources/router/auto"
+ *     export NODE_OPTIONS="${NODE_OPTIONS:-} --require /Users/x/.robot-resources/router/auto.cjs"
  *     # <<< robot-resources <<<
  *
- * Behavior decisions (see plan):
+ * Phase 8 fix: NODE_OPTIONS now uses an ABSOLUTE PATH to the auto.cjs the
+ * wizard copied to ~/.robot-resources/router/. The previous bare-module
+ * form `--require @robot-resources/router/auto` only resolved when the user
+ * was cd'd inside a project that had `@robot-resources/router` in its
+ * node_modules — and broke EVERY Node command from any other cwd with
+ * `Cannot find module`. Result: every wizard-success Node user pre-Phase-8
+ * had a NODE_OPTIONS line that crashed `node`/`npm`/etc. Symptom in
+ * Supabase: `node_shim_installed: 8` but `adapter_attached: 0`.
+ *
+ * Behavior decisions (preserved from Phase 3):
  *   - If NODE_OPTIONS is already set with a different --require (rare; e.g.
  *     dd-trace), append ours after theirs. Both load. The user keeps their
  *     existing tooling. The shell expansion `${NODE_OPTIONS:-} ...` handles
@@ -27,12 +36,14 @@ import { join } from 'node:path';
 const MARK_BEGIN = '# >>> robot-resources: NODE_OPTIONS auto-attach >>>';
 const MARK_END = '# <<< robot-resources <<<';
 
-const POSIX_LINE =
-  'export NODE_OPTIONS="${NODE_OPTIONS:-} --require @robot-resources/router/auto"';
+function buildPosixLine(autoPath) {
+  return `export NODE_OPTIONS="\${NODE_OPTIONS:-} --require ${autoPath}"`;
+}
 
-// Fish has different syntax (no `export`, uses `set -x`). Detected separately.
-const FISH_LINE =
-  'set -x NODE_OPTIONS "$NODE_OPTIONS --require @robot-resources/router/auto"';
+function buildFishLine(autoPath) {
+  // Fish has different syntax (no `export`, uses `set -x`).
+  return `set -x NODE_OPTIONS "$NODE_OPTIONS --require ${autoPath}"`;
+}
 
 /**
  * Discover which rc files are present for this user. Returns a list of
@@ -73,7 +84,11 @@ export function hasShellLine(home = homedir()) {
  * others on one failure. Per-file errors are returned as warnings the
  * caller can surface.
  */
-export function writeShellLine(home = homedir()) {
+export function writeShellLine({ autoPath, home = homedir() }) {
+  if (!autoPath) {
+    throw new Error('writeShellLine requires { autoPath } — absolute path to auto.cjs');
+  }
+
   const rcs = listShellRcFiles(home);
   const written = [];
   const errors = [];
@@ -97,7 +112,7 @@ export function writeShellLine(home = homedir()) {
         continue;
       }
 
-      const line = rc.kind === 'fish' ? FISH_LINE : POSIX_LINE;
+      const line = rc.kind === 'fish' ? buildFishLine(autoPath) : buildPosixLine(autoPath);
       const block =
         (text && !text.endsWith('\n') ? '\n' : '') +
         '\n' + MARK_BEGIN + '\n' + line + '\n' + MARK_END + '\n';
@@ -165,4 +180,4 @@ function getMode(path) {
 }
 
 // Exported for tests + telemetry payloads.
-export { MARK_BEGIN, MARK_END, POSIX_LINE, FISH_LINE };
+export { MARK_BEGIN, MARK_END, buildPosixLine, buildFishLine };

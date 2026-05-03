@@ -100,6 +100,19 @@ export function runUninstall({ purge = false } = {}) {
     errors.push({ component: 'shell_config_node_options', message: err.message });
   }
 
+  // 3b. Copied router dir at ~/.robot-resources/router/ (Phase 8). The shell
+  //     line points at this absolute path — once the line is gone, the
+  //     copied files are dead weight. Remove them.
+  const routerDir = join(homedir(), '.robot-resources', 'router');
+  if (existsSync(routerDir)) {
+    try {
+      rmSync(routerDir, { recursive: true, force: true });
+      components_removed.push('node_shim_router_dir');
+    } catch (err) {
+      errors.push({ component: 'node_shim_router_dir', message: err.message });
+    }
+  }
+
   // 4. Python shim — `pip uninstall -y robot-resources` against the resolved
   //    venv. Skip silently if no venv detected (the user may have installed
   //    via the wizard but already deleted the venv themselves).

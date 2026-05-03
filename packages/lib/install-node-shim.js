@@ -1,6 +1,7 @@
 import { writeShellLine, hasShellLine } from './shell-config.js';
 import { readConfig } from './config.mjs';
 import { detectNodeAgent } from './detect.js';
+import { installRouterFiles } from './install-router-files.js';
 
 const PLATFORM_URL = process.env.RR_PLATFORM_URL || 'https://api.robotresources.ai';
 
@@ -9,16 +10,20 @@ const PLATFORM_URL = process.env.RR_PLATFORM_URL || 'https://api.robotresources.
  * the non-OC Node path.
  *
  * Steps:
- *   1. Append the marker block to detected rc files (zsh / bash / fish)
- *      via shell-config.writeShellLine. Idempotent: re-running does nothing
- *      if the block is already present.
- *   2. Emit `node_shim_installed` telemetry with the shell list, sdks
- *      detected, dry-run flag, plus per-file errors.
+ *   1. Copy the bundled `@robot-resources/router` files to a stable absolute
+ *      path under `~/.robot-resources/router/` (mirrors the OC plugin pattern
+ *      at `~/.openclaw/extensions/`). Phase 8 fix: previously NODE_OPTIONS
+ *      used the bare module name `@robot-resources/router/auto` which only
+ *      resolved when the user was cd'd inside a project that had the
+ *      package in its node_modules. From any other cwd, EVERY `node`
+ *      command crashed with "Cannot find module".
+ *   2. Append the marker block to detected rc files (zsh / bash / fish)
+ *      with the ABSOLUTE PATH to the copied auto.cjs.
+ *   3. Emit `node_shim_installed` telemetry.
  *
  * The user has to start a new shell (or `source` the file) for the
  * NODE_OPTIONS to take effect — we tell them this in the wizard's
- * post-install message. For Phase 3 we don't try to mutate the running
- * shell; that's a Phase 6 nice-to-have.
+ * post-install message.
  *
  * Windows: shell-config.writeShellLine returns no rc files on Windows
  * (we only support POSIX in P3). The wizard prints manual instructions
@@ -40,8 +45,8 @@ export async function installNodeShim({ cwd = process.cwd(), dryRun = false } = 
       reason: 'windows_not_supported_yet',
       message:
         'Windows shell-config writing is not yet supported. Set ' +
-        'NODE_OPTIONS=--require @robot-resources/router/auto manually in your ' +
-        'system environment variables, or wait for Phase 6.',
+        'NODE_OPTIONS to point at ~/.robot-resources/router/auto.cjs manually ' +
+        'in your system environment variables, or wait for Phase 6.',
     };
   }
 
@@ -58,8 +63,29 @@ export async function installNodeShim({ cwd = process.cwd(), dryRun = false } = 
     return { ok: true, message: 'Dry-run: would have written NODE_OPTIONS to shell rc.' };
   }
 
+  // Phase 8: copy router to an absolute path under ~/.robot-resources/router/
+  // before we wire the shell config. If the copy fails, we don't write a
+  // broken NODE_OPTIONS line.
+  let autoPath;
+  try {
+    autoPath = installRouterFiles();
+  } catch (err) {
+    await emit({
+      shell: 'unknown',
+      shell_config_path: null,
+      sdks_detected: sdks,
+      dry_run: false,
+      reason: 'router_copy_failed',
+      error_messages: [err.message],
+    });
+    return {
+      ok: false,
+      message: `Could not copy router files to ~/.robot-resources/router/: ${err.message}`,
+    };
+  }
+
   const alreadyInstalled = hasShellLine();
-  const result = writeShellLine();
+  const result = writeShellLine({ autoPath });
 
   // Single shell value for the funnel even though we may have written to
   // multiple rc files. Pick the dominant one for telemetry.
@@ -74,6 +100,7 @@ export async function installNodeShim({ cwd = process.cwd(), dryRun = false } = 
     files_written: result.written.length,
     files_with_errors: result.errors.length,
     error_messages: result.errors.map((e) => `${e.path}: ${e.message}`).slice(0, 3),
+    auto_path: autoPath,
   });
 
   if (alreadyInstalled && result.written.length === 0) {

@@ -6,6 +6,12 @@ vi.mock('../lib/shell-config.js', () => ({
   hasShellLine: vi.fn(),
 }));
 
+vi.mock('../lib/install-router-files.js', () => ({
+  // Default mock returns the absolute path the wizard would have written
+  // to. Phase 8: this is what NODE_OPTIONS now points at.
+  installRouterFiles: vi.fn(() => '/mock/home/.robot-resources/router/auto.cjs'),
+}));
+
 // install-python-shim.js
 vi.mock('../lib/venv-detect.js', () => ({
   detectVenv: vi.fn(),
@@ -26,6 +32,7 @@ vi.mock('node:child_process', () => ({
 }));
 
 const { writeShellLine, hasShellLine } = await import('../lib/shell-config.js');
+const { installRouterFiles } = await import('../lib/install-router-files.js');
 const { detectVenv, runPipInstall } = await import('../lib/venv-detect.js');
 const { readConfig } = await import('../lib/config.mjs');
 const { installNodeShim } = await import('../lib/install-node-shim.js');
@@ -49,16 +56,21 @@ afterEach(() => {
 });
 
 describe('installNodeShim — happy path', () => {
-  it('writes shell line + emits node_shim_installed telemetry', async () => {
+  it('copies router files + writes shell line + emits telemetry', async () => {
     const result = await installNodeShim();
     expect(result.ok).toBe(true);
+    expect(installRouterFiles).toHaveBeenCalledOnce();
     expect(writeShellLine).toHaveBeenCalledOnce();
+    // Phase 8: writeShellLine MUST be called with the absolute autoPath.
+    const callArg = writeShellLine.mock.calls[0][0];
+    expect(callArg).toEqual({ autoPath: '/mock/home/.robot-resources/router/auto.cjs' });
     const calls = globalThis.fetch.mock.calls.filter(
       (c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'),
     );
     expect(calls).toHaveLength(1);
     const body = JSON.parse(calls[0][1].body);
     expect(body.event_type).toBe('node_shim_installed');
+    expect(body.payload.auto_path).toBe('/mock/home/.robot-resources/router/auto.cjs');
     expect(body.payload.sdks_detected).toContain('@anthropic-ai/sdk');
   });
 
@@ -68,6 +80,21 @@ describe('installNodeShim — happy path', () => {
     const result = await installNodeShim();
     expect(result.ok).toBe(true);
     expect(result.already).toBe(true);
+  });
+
+  it('Phase 8: returns ok=false when router file copy throws (never writes broken shell line)', async () => {
+    installRouterFiles.mockImplementationOnce(() => {
+      throw new Error('EACCES copying lib/');
+    });
+    const result = await installNodeShim();
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('EACCES');
+    expect(writeShellLine).not.toHaveBeenCalled();
+    // Telemetry still fires so we see the failure in Supabase.
+    const calls = globalThis.fetch.mock.calls.filter(
+      (c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'),
+    );
+    expect(JSON.parse(calls[0][1].body).payload.reason).toBe('router_copy_failed');
   });
 });
 

@@ -24,9 +24,13 @@ const {
   removeShellLine,
   MARK_BEGIN,
   MARK_END,
-  POSIX_LINE,
-  FISH_LINE,
+  buildPosixLine,
+  buildFishLine,
 } = await import('../lib/shell-config.js');
+
+const TEST_AUTO_PATH = '/mock/home/.robot-resources/router/auto.cjs';
+const POSIX_LINE = buildPosixLine(TEST_AUTO_PATH);
+const FISH_LINE = buildFishLine(TEST_AUTO_PATH);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -81,7 +85,7 @@ describe('writeShellLine', () => {
   it('appends a marker block when zsh rc exists and lacks our line', () => {
     existsSync.mockImplementation((p) => String(p).endsWith('.zshrc'));
     readFileSync.mockReturnValue('export FOO=1\n');
-    const result = writeShellLine();
+    const result = writeShellLine({ autoPath: TEST_AUTO_PATH });
     expect(result.written).toEqual(['/mock/home/.zshrc']);
     expect(result.errors).toEqual([]);
     expect(appendFileSync).toHaveBeenCalledOnce();
@@ -95,7 +99,7 @@ describe('writeShellLine', () => {
   it('writes fish syntax to fish config', () => {
     existsSync.mockImplementation((p) => String(p).endsWith('config.fish'));
     readFileSync.mockReturnValue('');
-    writeShellLine();
+    writeShellLine({ autoPath: TEST_AUTO_PATH });
     const [, content] = appendFileSync.mock.calls[0];
     expect(content).toContain(FISH_LINE);
     expect(content).not.toContain(POSIX_LINE);
@@ -104,7 +108,7 @@ describe('writeShellLine', () => {
   it('is idempotent when marker already present (no append)', () => {
     existsSync.mockImplementation((p) => String(p).endsWith('.zshrc'));
     readFileSync.mockReturnValue(`${MARK_BEGIN}\n${POSIX_LINE}\n${MARK_END}\n`);
-    const result = writeShellLine();
+    const result = writeShellLine({ autoPath: TEST_AUTO_PATH });
     expect(result.written).toEqual([]);
     expect(appendFileSync).not.toHaveBeenCalled();
   });
@@ -114,7 +118,7 @@ describe('writeShellLine', () => {
       String(p).endsWith('.zshrc') || String(p).endsWith('.bashrc'),
     );
     readFileSync.mockReturnValue('');
-    const result = writeShellLine();
+    const result = writeShellLine({ autoPath: TEST_AUTO_PATH });
     expect(result.written).toHaveLength(2);
     expect(appendFileSync).toHaveBeenCalledTimes(2);
   });
@@ -123,7 +127,7 @@ describe('writeShellLine', () => {
     const origPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
     existsSync.mockReturnValue(false);
-    const result = writeShellLine();
+    const result = writeShellLine({ autoPath: TEST_AUTO_PATH });
     expect(result.written).toEqual(['/mock/home/.zshrc']);
     Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
   });
@@ -134,11 +138,28 @@ describe('writeShellLine', () => {
     );
     readFileSync.mockReturnValue('');
     appendFileSync.mockImplementationOnce(() => { throw new Error('EACCES'); });
-    const result = writeShellLine();
+    const result = writeShellLine({ autoPath: TEST_AUTO_PATH });
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0].message).toBe('EACCES');
     // The other file should still get written
     expect(result.written).toHaveLength(1);
+  });
+
+  it('Phase 8: writes ABSOLUTE PATH in NODE_OPTIONS, not bare module name', () => {
+    existsSync.mockImplementation((p) => String(p).endsWith('.zshrc'));
+    readFileSync.mockReturnValue('');
+    writeShellLine({ autoPath: '/Users/test/.robot-resources/router/auto.cjs' });
+    const [, content] = appendFileSync.mock.calls[0];
+    expect(content).toContain('--require /Users/test/.robot-resources/router/auto.cjs');
+    // Critical: must NOT use the bare-module form that fails to resolve
+    // outside the user's project directory.
+    expect(content).not.toContain('--require @robot-resources/router/auto');
+  });
+
+  it('throws when autoPath is missing — never writes a half-broken line', () => {
+    existsSync.mockImplementation((p) => String(p).endsWith('.zshrc'));
+    expect(() => writeShellLine({})).toThrow(/autoPath/);
+    expect(() => writeShellLine({ autoPath: '' })).toThrow(/autoPath/);
   });
 });
 
