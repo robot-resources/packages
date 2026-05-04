@@ -5,6 +5,7 @@ import { stripJson5 } from './json5.js';
 import { removeShellLine } from './shell-config.js';
 import { detectVenv } from './venv-detect.js';
 import { spawnSync } from 'node:child_process';
+import { removePersistedNodeOptions } from './windows-env.js';
 
 /**
  * Single source of truth for `npx robot-resources --uninstall`.
@@ -86,18 +87,32 @@ export function runUninstall({ purge = false } = {}) {
     }
   }
 
-  // 3. Shell config — remove the NODE_OPTIONS marker block from any rc
-  //    files Phase 3's wizard wrote to. Idempotent: no-op if not present.
-  try {
-    const result = removeShellLine();
-    if (result.removed.length > 0) {
-      components_removed.push('shell_config_node_options');
+  // 3. Shell config / Windows registry — remove the NODE_OPTIONS line
+  //    Phase 3's wizard wrote to. Idempotent: no-op if not present.
+  if (process.platform === 'win32') {
+    // Phase 9: restore from backup or clear HKCU\Environment\NODE_OPTIONS.
+    try {
+      const result = removePersistedNodeOptions();
+      if (result.ok && result.action !== 'noop') {
+        components_removed.push(`win_node_options_${result.action}`);
+      } else if (!result.ok) {
+        errors.push({ component: 'win_node_options', message: 'reg_restore_failed' });
+      }
+    } catch (err) {
+      errors.push({ component: 'win_node_options', message: err.message });
     }
-    for (const e of result.errors) {
-      errors.push({ component: 'shell_config_node_options', message: `${e.path}: ${e.message}` });
+  } else {
+    try {
+      const result = removeShellLine();
+      if (result.removed.length > 0) {
+        components_removed.push('shell_config_node_options');
+      }
+      for (const e of result.errors) {
+        errors.push({ component: 'shell_config_node_options', message: `${e.path}: ${e.message}` });
+      }
+    } catch (err) {
+      errors.push({ component: 'shell_config_node_options', message: err.message });
     }
-  } catch (err) {
-    errors.push({ component: 'shell_config_node_options', message: err.message });
   }
 
   // 3b. Copied router dir at ~/.robot-resources/router/ (Phase 8). The shell

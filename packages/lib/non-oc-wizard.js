@@ -107,12 +107,21 @@ async function showJsPath() {
     blank();
     info('Once your shell picks up the new NODE_OPTIONS, every Node agent on');
     info('this machine routes Anthropic SDK calls through Robot Resources.');
-    info('Open a new terminal — or run:  source ~/.zshrc   (or your shell rc)');
+    if (process.platform === 'win32') {
+      info('Open a new cmd / PowerShell window — current terminals will not see the change.');
+    } else {
+      info('Open a new terminal — or run:  source ~/.zshrc   (or your shell rc)');
+    }
   } else {
     warn(result.message);
     blank();
-    info('Manual install (paste into ~/.zshrc or ~/.bashrc):');
-    info('  export NODE_OPTIONS="${NODE_OPTIONS:-} --require @robot-resources/router/auto"');
+    if (process.platform === 'win32') {
+      info('Manual install: in a new cmd, run:');
+      info('  setx NODE_OPTIONS "--require %USERPROFILE%\\.robot-resources\\router\\auto.cjs"');
+    } else {
+      info('Manual install (paste into ~/.zshrc or ~/.bashrc):');
+      info('  export NODE_OPTIONS="${NODE_OPTIONS:-} --require ~/.robot-resources/router/auto.cjs"');
+    }
   }
   blank();
   info('Docs: https://robotresources.ai/docs/langchain');

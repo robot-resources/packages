@@ -148,7 +148,10 @@ describe('runNonOcWizard — --for=<target> direct routing', () => {
     });
     await runNonOcWizard({ nonInteractive: true, target: 'js' });
     const calls = info.mock.calls.map((c) => c[0]).join('\n');
-    expect(calls).toContain('--require @robot-resources/router/auto');
+    // Phase 8+9: fallback message uses absolute path under ~/.robot-resources/.
+    // Platform-specific (POSIX export … vs Windows setx). Match on the path
+    // so the test stays platform-agnostic.
+    expect(calls).toContain('robot-resources/router/auto.cjs');
   });
 
   it('falls back to printed instructions when installPythonShim returns ok=false', async () => {

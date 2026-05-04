@@ -12,6 +12,11 @@ vi.mock('../lib/install-router-files.js', () => ({
   installRouterFiles: vi.fn(() => '/mock/home/.robot-resources/router/auto.cjs'),
 }));
 
+vi.mock('../lib/windows-env.js', () => ({
+  writePersistedNodeOptions: vi.fn(),
+  removePersistedNodeOptions: vi.fn(),
+}));
+
 // install-python-shim.js
 vi.mock('../lib/venv-detect.js', () => ({
   detectVenv: vi.fn(),
@@ -33,6 +38,7 @@ vi.mock('node:child_process', () => ({
 
 const { writeShellLine, hasShellLine } = await import('../lib/shell-config.js');
 const { installRouterFiles } = await import('../lib/install-router-files.js');
+const { writePersistedNodeOptions } = await import('../lib/windows-env.js');
 const { detectVenv, runPipInstall } = await import('../lib/venv-detect.js');
 const { readConfig } = await import('../lib/config.mjs');
 const { installNodeShim } = await import('../lib/install-node-shim.js');
@@ -98,13 +104,85 @@ describe('installNodeShim — happy path', () => {
   });
 });
 
-describe('installNodeShim — Windows', () => {
-  it('refuses to write on win32 and returns reason=windows_not_supported_yet', async () => {
+describe('installNodeShim — Windows (Phase 9 setx)', () => {
+  beforeEach(() => {
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+  });
+
+  it('copies router files + calls writePersistedNodeOptions on win32', async () => {
+    writePersistedNodeOptions.mockReturnValue({
+      ok: true,
+      already: false,
+      written: '--require "/mock/home/.robot-resources/router/auto.cjs"',
+      length: 67,
+    });
+    const result = await installNodeShim();
+    expect(result.ok).toBe(true);
+    expect(installRouterFiles).toHaveBeenCalledOnce();
+    expect(writePersistedNodeOptions).toHaveBeenCalledWith({
+      autoPath: '/mock/home/.robot-resources/router/auto.cjs',
+    });
+    expect(writeShellLine).not.toHaveBeenCalled();
+
+    const calls = globalThis.fetch.mock.calls.filter(
+      (c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'),
+    );
+    const payload = JSON.parse(calls[0][1].body).payload;
+    expect(payload.shell).toBe('win32');
+    expect(payload.shell_config_path).toBe('HKCU\\Environment\\NODE_OPTIONS');
+    expect(payload.files_written).toBe(1);
+    expect(payload.win_node_options_length).toBe(67);
+  });
+
+  it('returns already=true when win-env says it was already set', async () => {
+    writePersistedNodeOptions.mockReturnValue({
+      ok: true,
+      already: true,
+      written: '--require "/mock/home/.robot-resources/router/auto.cjs"',
+      length: 67,
+    });
+    const result = await installNodeShim();
+    expect(result.ok).toBe(true);
+    expect(result.already).toBe(true);
+  });
+
+  it('returns ok=false when setx exceeds the 1024-char limit', async () => {
+    writePersistedNodeOptions.mockReturnValue({
+      ok: false,
+      reason: 'setx_limit_exceeded',
+      error_message: 'merged value is 1100 chars; setx truncates at 1024',
+      length: 1100,
+    });
     const result = await installNodeShim();
     expect(result.ok).toBe(false);
-    expect(result.reason).toBe('windows_not_supported_yet');
-    expect(writeShellLine).not.toHaveBeenCalled();
+    expect(result.reason).toBe('setx_limit_exceeded');
+    const calls = globalThis.fetch.mock.calls.filter(
+      (c) => typeof c[0] === 'string' && c[0].includes('/v1/telemetry'),
+    );
+    const payload = JSON.parse(calls[0][1].body).payload;
+    expect(payload.reason).toBe('setx_limit_exceeded');
+    expect(payload.win_node_options_length).toBe(1100);
+  });
+
+  it('returns ok=false when setx itself fails', async () => {
+    writePersistedNodeOptions.mockReturnValue({
+      ok: false,
+      reason: 'setx_failed',
+      error_message: 'Access is denied.',
+    });
+    const result = await installNodeShim();
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('setx_failed');
+    expect(result.message).toContain('Access is denied');
+  });
+
+  it('still aborts cleanly if router file copy throws — never calls setx', async () => {
+    installRouterFiles.mockImplementationOnce(() => {
+      throw new Error('EACCES on Windows');
+    });
+    const result = await installNodeShim();
+    expect(result.ok).toBe(false);
+    expect(writePersistedNodeOptions).not.toHaveBeenCalled();
   });
 });
 
