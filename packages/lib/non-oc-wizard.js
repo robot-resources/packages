@@ -106,7 +106,8 @@ async function showJsPath() {
     }
     blank();
     info('Once your shell picks up the new NODE_OPTIONS, every Node agent on');
-    info('this machine routes Anthropic SDK calls through Robot Resources.');
+    info('this machine routes Anthropic, OpenAI, and Google SDK calls through');
+    info('Robot Resources.');
     if (process.platform === 'win32') {
       info('Open a new cmd / PowerShell window — current terminals will not see the change.');
     } else {
