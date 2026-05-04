@@ -21,7 +21,7 @@
  */
 
 import { startLocalServer } from '../local-server.js';
-import { emitAttachEvent, detectProvidersFromEnv, readSdkVersion } from './_attach.js';
+import { emitAttachEvent, detectProvidersFromEnv, readSdkVersion, buildSharedTelemetry } from './_attach.js';
 import { ensureLocalServerStarted } from './_local-server-once.js';
 
 /**
@@ -39,7 +39,7 @@ export async function attach({ primaryBaseUrl } = {}) {
     bound = await ensureLocalServerStarted({
       starter: () => startLocalServer({
         api: null,
-        telemetry: null,
+        telemetry: buildSharedTelemetry(),
         detectedProviders,
       }),
     });

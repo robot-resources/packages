@@ -1,5 +1,17 @@
 # robot-resources
 
+## 1.14.1
+
+### Patch Changes
+
+- e864206: fix(cli): non-OC wizard Node-path message lists all three SDKs
+
+  The Node-path success message at `non-oc-wizard.js:108-109` told users "every Node agent on this machine routes Anthropic SDK calls through Robot Resources." That message was written before multi-lab dispatch landed — `auto.cjs` actually attaches Anthropic, OpenAI, AND Google adapters (see `auto.cjs:78-84`). The wizard was under-promising what the shim does.
+
+  One-line copy fix: message now reads "routes Anthropic, OpenAI, and Google SDK calls through Robot Resources," matching both reality and the Python-path message style at `non-oc-wizard.js:143-144` (which was already accurate).
+
+  No behavior change. Surfaced during a pass over `llms.txt` / `llms-full.txt` for doc/code drift.
+
 ## 1.14.0
 
 ### Minor Changes

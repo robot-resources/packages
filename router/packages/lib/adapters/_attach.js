@@ -14,8 +14,56 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
+import { createTelemetry } from '../telemetry.js';
 
 const require = createRequire(import.meta.url);
+
+/**
+ * Read api_key once and cache. Used by both `emitAttachEvent` (its own
+ * fetch path) and `buildSharedTelemetry` (the in-process server path).
+ */
+function readApiKey() {
+  try {
+    const cfgPath = join(homedir(), '.robot-resources', 'config.json');
+    const cfg = JSON.parse(readFileSync(cfgPath, 'utf-8'));
+    return cfg.api_key || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Process-singleton telemetry instance shared by all three adapters and
+ * passed into `startLocalServer({ telemetry })`. Without this, the local
+ * server's `telemetry?.emit?.('route_completed', ...)` short-circuits to
+ * a no-op — the routing happens but never reports back to Supabase.
+ *
+ * Phase 10 fix. Pre-Phase-10, each adapter passed `telemetry: null` to
+ * `startLocalServer`. Result: `route_completed`, `local_server_started`,
+ * `route_failed`, `no_providers_detected`, `local_server_no_key`,
+ * `local_server_upstream_failed` all evaporated for non-OC users.
+ *
+ * Returns null when the user has no api_key — `emit()` is then a no-op
+ * inside `createTelemetry` itself, but returning null lets local-server's
+ * own `telemetry?.emit?.()` short-circuit cheaper.
+ */
+let _sharedTelemetry;
+export function buildSharedTelemetry() {
+  if (_sharedTelemetry !== undefined) return _sharedTelemetry;
+  const apiKey = readApiKey();
+  if (!apiKey) {
+    _sharedTelemetry = null;
+    return _sharedTelemetry;
+  }
+  const platformUrl = process.env.RR_PLATFORM_URL || undefined;
+  _sharedTelemetry = createTelemetry({ apiKey, platformUrl });
+  return _sharedTelemetry;
+}
+
+// Test-only reset so vitest can re-exercise the singleton between cases.
+export function _resetSharedTelemetryForTests() {
+  _sharedTelemetry = undefined;
+}
 
 /**
  * Best-effort POST of `adapter_attached` to the platform telemetry endpoint.
@@ -28,14 +76,7 @@ const require = createRequire(import.meta.url);
  * fetch timeout.
  */
 export async function emitAttachEvent({ sdk, sdk_version = null, attached, ...rest }) {
-  let apiKey;
-  try {
-    const cfgPath = join(homedir(), '.robot-resources', 'config.json');
-    const cfg = JSON.parse(readFileSync(cfgPath, 'utf-8'));
-    apiKey = cfg.api_key;
-  } catch {
-    return;
-  }
+  const apiKey = readApiKey();
   if (!apiKey) return;
 
   const platformUrl = process.env.RR_PLATFORM_URL || 'https://api.robotresources.ai';

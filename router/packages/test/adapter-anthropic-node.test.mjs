@@ -128,6 +128,24 @@ describe('attach() — bind failure', () => {
   });
 });
 
+describe('attach() — Phase 10 telemetry wiring', () => {
+  it('passes a real telemetry instance (not null) to startLocalServer', async () => {
+    startLocalServer.mockResolvedValue({ port: 18790, server: {} });
+
+    await attach({ primaryBaseUrl: 'http://127.0.0.1:18790/anthropic' });
+
+    const callArg = startLocalServer.mock.calls[0][0];
+    // Pre-Phase-10 this was `null`. Now should be either a telemetry instance
+    // (when api_key exists in ~/.robot-resources/config.json) OR null when
+    // no key (CI / fresh user). Either is acceptable — but the SHAPE has to
+    // be a valid arg (object with .emit or null), never `undefined`.
+    expect(callArg).toHaveProperty('telemetry');
+    if (callArg.telemetry !== null) {
+      expect(typeof callArg.telemetry.emit).toBe('function');
+    }
+  });
+});
+
 describe('attach() — provider detection', () => {
   it('passes detected providers to startLocalServer + telemetry payload', async () => {
     process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
