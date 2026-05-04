@@ -1,5 +1,59 @@
 # robot-resources
 
+## 1.14.0
+
+### Minor Changes
+
+- 06f094b: feat(cli): Windows NODE_OPTIONS support via `setx` (Phase 9)
+
+  Closes the platform's last visible non-OC install gap. Pre-Phase-9, Windows wizard runs returned `shell=unsupported, files=None` — the wizard correctly identified the platform and emitted telemetry, but installed nothing actionable. 50% of the post-Phase-8 cohort (`12d09b20`, `34c6b8fb`) hit this gap.
+
+  **Mechanism.** Mirror the POSIX flow at the registry layer:
+
+  1. Reuse `installRouterFiles()` from Phase 8 (`homedir()` is platform-aware — works as-is on Windows).
+  2. New `windows-env.js` module wraps `setx.exe` to write `NODE_OPTIONS` into `HKCU\\Environment`. Read existing value via `reg query`, append our `--require "<auto.cjs absolute path>"` (idempotent — no-op if already present).
+  3. New cmd / PowerShell / Win+R-launched Node processes inherit the variable.
+
+  **Why `setx` not PowerShell `$PROFILE`:** PR #141 (the deleted Task Scheduler work) explicitly chose `.cmd` over `.ps1` because corporate ExecutionPolicy on locked-down fleets often blocks unsigned `.ps1`. `setx` is universal across cmd + PowerShell + Win+R-launched processes, no admin needed.
+
+  **Why not just append to PowerShell `$PROFILE`:** `$PROFILE` only affects PowerShell; Win+R-launched `node.exe` and cmd-launched processes miss it. Registry-level write covers all entry points.
+
+  **Safety properties:**
+
+  - **Preserves user tooling** (dd-trace, OpenTelemetry, etc.). Reads the prior `NODE_OPTIONS` from `HKCU\\Environment` first, appends our flag after, never clobbers.
+  - **Idempotent.** Detects our `--require <abs path>` already in the value and short-circuits.
+  - **Refuses to write over the `setx` 1024-char limit.** Returns `setx_limit_exceeded` rather than silently truncating into a broken NODE_OPTIONS that would crash every Node command.
+  - **Backup + restore on uninstall.** Pre-modification value saved to `~/.robot-resources/windows-prior-node-options.txt`. `--uninstall` restores it (or clears the var if no backup).
+
+  **Files:**
+
+  - `packages/cli/lib/windows-env.js` — NEW. `readPersistedNodeOptions`, `writePersistedNodeOptions`, `removePersistedNodeOptions`. ~180 lines.
+  - `packages/cli/lib/install-node-shim.js` — `if (process.platform === 'win32')` branch routes to the new helper instead of returning `unsupported`.
+  - `packages/cli/lib/uninstall.js` — Windows branch calls `removePersistedNodeOptions` instead of `removeShellLine`.
+  - `packages/cli/lib/non-oc-wizard.js` — post-install message branches POSIX vs Windows (cmd terminal vs `source ~/.zshrc`).
+  - `packages/cli/test/windows-env.test.mjs` — NEW, 12 tests across read / write / remove paths.
+  - `packages/cli/test/install-shims.test.mjs` — Windows tests rewritten for the new behavior. 5 cases: happy path, already-installed, setx-limit, setx-failure, copy-failure.
+
+  **Tests:** 265/265 CLI tests pass (17 new).
+
+  **New telemetry payload fields (`node_shim_installed` on Windows):**
+
+  - `shell: 'win32'`
+  - `shell_config_path: 'HKCU\\Environment\\NODE_OPTIONS'`
+  - `win_node_options_length: <int>` — surfaces real-world value sizes so we can spot truncation pressure in Supabase
+  - `reason: 'setx_limit_exceeded' | 'setx_failed' | 'router_copy_failed' | null`
+
+  **What's NOT in this PR (still uncovered):**
+
+  - Docker / Kubernetes containers (no shell, env from entrypoint)
+  - Serverless (Lambda / Cloud Run / Vercel Functions — NODE_OPTIONS often sandboxed away)
+  - Bun (uses `--preload` instead of `--require`)
+  - Deno (no NODE_OPTIONS)
+
+  These need different mechanisms (Dockerfile snippets, IaC env injection, runtime-specific adapters) and aren't a single-wizard fix. The May 1 cohort taught us not to design ahead of telemetry — wait for those cohorts to show up before building for them.
+
+  **Stranded users:** the 4 Linux users from the broken-NODE_OPTIONS pre-Phase-8 era still have their broken `.bashrc` lines. The 2 Windows users from the post-Phase-8 cohort still got nothing. None auto-recover. They need to re-run `npx robot-resources@latest` (or manually clean their shell config / registry).
+
 ## 1.13.0
 
 ### Minor Changes

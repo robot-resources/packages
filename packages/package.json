@@ -1,6 +1,6 @@
 {
   "name": "robot-resources",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "description": "Robot Resources — AI agent tools. One command to install everything.",
   "type": "module",
   "bin": {
